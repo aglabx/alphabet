@@ -1,6 +1,6 @@
 .PHONY: all build release debug check test clean fmt install help
 
-BIN     := target/release/alphasplitter
+BIN     := target/release/alphabet
 INPUT   ?= input.10kb.fasta
 OUTDIR  ?= .
 THREADS ?= 8
@@ -36,7 +36,7 @@ run: release
 	$(BIN) run $(INPUT) -o $(OUTDIR) -t $(THREADS)
 
 help:
-	@echo "AlphaSplitter — make targets"
+	@echo "Alphabet — make targets"
 	@echo "  make                       build release binary (default)"
 	@echo "  make debug                 build debug binary"
 	@echo "  make check                 cargo check"

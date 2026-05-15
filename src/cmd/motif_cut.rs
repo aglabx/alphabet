@@ -355,7 +355,7 @@ pub fn run_from_args(argv: Vec<String>) {
     {
         use std::io::Write;
         let mut f = std::io::BufWriter::new(std::fs::File::create(&args.output).unwrap());
-        writeln!(f, "#alphasplitter v{} / cut", env!("CARGO_PKG_VERSION")).unwrap();
+        writeln!(f, "#alphabet v{} / cut", env!("CARGO_PKG_VERSION")).unwrap();
         writeln!(f, "#input: {}", args.input).unwrap();
         writeln!(f, "#motifs_source: {}", args.motifs.as_deref().unwrap_or("<built-in primate alpha>")).unwrap();
         for (fam, _) in &family_results {
@@ -456,7 +456,7 @@ pub fn run_from_args(argv: Vec<String>) {
             for (letter_name, mons) in &per_letter {
                 let path = fam_dir.join(format!("{}.tsv", letter_name));
                 let mut f = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
-                writeln!(f, "#alphasplitter v{} / cut letters", env!("CARGO_PKG_VERSION")).unwrap();
+                writeln!(f, "#alphabet v{} / cut letters", env!("CARGO_PKG_VERSION")).unwrap();
                 writeln!(f, "#family: {} period={}", fam.id, fam.period).unwrap();
                 writeln!(f, "#letter: {} (n={})", letter_name, mons.len()).unwrap();
                 writeln!(f, "#columns: sequence array_id strand start end length monomer_idx subtype site_order site_structure").unwrap();

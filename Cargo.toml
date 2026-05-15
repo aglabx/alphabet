@@ -1,10 +1,10 @@
 [package]
-name = "alphasplitter"
+name = "alphabet"
 version = "0.2.0"
 edition = "2021"
 
 [[bin]]
-name = "alphasplitter"
+name = "alphabet"
 path = "src/main.rs"
 
 [dependencies]
