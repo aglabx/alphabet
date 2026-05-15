@@ -7,7 +7,7 @@ Cargo.lock
 /data
 /results
 
-# Default-named artifacts written to cwd when `alphasplitter cut` / `run`
+# Default-named artifacts written to cwd when `alphabet cut` / `run`
 # is invoked without explicit paths.
 /chains.json
 /families.json
@@ -21,3 +21,4 @@ Cargo.lock
 # editor / agent config
 /.claude
 /temp
+CLAUDE.md
