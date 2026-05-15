@@ -1,27 +1,27 @@
-# AlphaSplitter
+# Alphabet
 
 Ab initio discovery of satellite DNA monomer alphabets from tandem repeat arrays.
 
-AlphaSplitter identifies periodic conserved anchor sites in satellite DNA, assembles them into chain templates, and classifies monomers by structural indels — without reference HMMs, curated databases, or prior knowledge of the satellite family.
+Alphabet identifies periodic conserved anchor sites in satellite DNA, assembles them into chain templates, and classifies monomers by structural indels — without reference HMMs, curated databases, or prior knowledge of the satellite family.
 
 ## Quick Start
 
-AlphaSplitter is a single `alphasplitter` CLI with subcommands. Build once, then invoke.
+Alphabet is a single `alphabet` CLI with subcommands. Build once, then invoke.
 
 ```bash
 # Build
 cargo build --release          # or: make
 
 # End-to-end pipeline (discover → cut → annotate)
-./target/release/alphasplitter run arrays.10kb.fasta -o results/ -t 96
+./target/release/alphabet run arrays.10kb.fasta -o results/ -t 96
 
 # Or stage-by-stage
-./target/release/alphasplitter discover arrays.10kb.fasta -o chains.json -t 96
-./target/release/alphasplitter cut      arrays.10kb.fasta -m chains.json -o monomers.tsv -t 96
-./target/release/alphasplitter annotate monomers.tsv annotated.tsv
+./target/release/alphabet discover arrays.10kb.fasta -o chains.json -t 96
+./target/release/alphabet cut      arrays.10kb.fasta -m chains.json -o monomers.tsv -t 96
+./target/release/alphabet annotate monomers.tsv annotated.tsv
 ```
 
-Run `alphasplitter --help` for the full subcommand list; every subcommand takes `--help` as well. `make run INPUT=arrays.10kb.fasta OUTDIR=results THREADS=96` is the Makefile shortcut for the end-to-end path.
+Run `alphabet --help` for the full subcommand list; every subcommand takes `--help` as well. `make run INPUT=arrays.10kb.fasta OUTDIR=results THREADS=96` is the Makefile shortcut for the end-to-end path.
 
 ## What it does
 
@@ -42,7 +42,7 @@ Run `alphasplitter --help` for the full subcommand list; every subcommand takes 
 satellome .10kb.fasta
   │
   ▼
-alphasplitter discover      (per-period, iterative SF discovery)
+alphabet discover      (per-period, iterative SF discovery)
   ├── Scan 8-mers → filter by periodicity + support + complexity
   ├── Grow by Shannon entropy (cap 11bp)
   ├── Discover links (exact co-occurrence, stable spacing)
@@ -50,7 +50,7 @@ alphasplitter discover      (per-period, iterative SF discovery)
   └── → chains.json (families[]: motifs + claimed array whitelist)
   │
   ▼
-alphasplitter cut -m chains.json
+alphabet cut -m chains.json
   ├── Partition arrays by family (each array gets cut with only its
   │     family's motifs — no cross-SF contamination)
   ├── Scan both strands, strand-normalize
@@ -62,7 +62,7 @@ alphasplitter cut -m chains.json
        family_consensus.fa, families.json
   │
   ▼
-alphasplitter annotate
+alphabet annotate
   ├── CENP-B box scoring (nTTCGnnnnAnnCGGGn, both strands)
   ├── 9-char and 17-char CIGAR notation
   └── → annotated.tsv
@@ -124,15 +124,15 @@ Alexandrov validation: 38/39 SF types recovered, 96.3% of monomers assigned.
 Manifest header (one `#` block from `cut`, one from `annotate`):
 
 ```
-#alphasplitter v0.2.0 / cut
+#alphabet v0.2.0 / cut
 #input: arrays.10kb.fasta
 #motifs_source: chains.json
 #family P171SF0 period=171 sites: M1=ACATCACAAAG M2=AGAATGCTTCT ...
 #columns: family array_id strand monomer_idx start end length letter subtype
 #          site_order site_structure sites distances sequence
-#alphasplitter v0.2.0 / annotate
+#alphabet v0.2.0 / annotate
 #CENP-B_box_ref: nTTCGnnnnAnnCGGGn (17bp, searched on BOTH strands)
-#cenpb_labels: B+ (score>=7), B? (score=6), B- (score<=5)
+#cenpb_labels: B+ (score==9), B? (score 7-8), B- (score<=6)
 ```
 
 Columns:
@@ -147,7 +147,7 @@ Columns:
 | subtype | Letter + site sequence variant |
 | site_order | Chain sites: `abcde`, `ab-de`, `abdebcde` |
 | site_structure | `gap_before:sites_with_distances:gap_after` |
-| cenpb | `B+` (≥7/9), `B?` (6/9), `B-` (≤5/9) |
+| cenpb | `B+` (9/9), `B?` (7-8/9), `B-` (≤6/9) |
 | cenpb_cigar17 | Full 17-char CIGAR |
 | sequence | Monomer DNA sequence |
 
@@ -158,7 +158,7 @@ Columns:
 
 ## Citation
 
-Komissarov A. (2026). AlphaSplitter: Ab initio discovery of satellite DNA monomer alphabets from tandem repeat arrays. *In preparation.*
+Komissarov A. (2026). Alphabet: Ab initio discovery of satellite DNA monomer alphabets from tandem repeat arrays. *In preparation.*
 
 ## License
 
