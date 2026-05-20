@@ -39,6 +39,12 @@ enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Multi-anchor position-aware monomer cutter (alpha satellite v2)
+    #[command(name = "cut-v2")]
+    CutV2 {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Annotate monomer TSV with CENP-B box columns
     Annotate {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -126,6 +132,7 @@ fn main() {
 
         Cmd::Discover { args } => cmd::discover_chains::run_from_args(prepend_prog("discover", args)),
         Cmd::Cut { args } => cmd::motif_cut::run_from_args(prepend_prog("cut", args)),
+        Cmd::CutV2 { args } => cmd::cut_v2::run_from_args(prepend_prog("cut-v2", args)),
         Cmd::Annotate { args } => cmd::annotate_cenpb::run_from_args(prepend_prog("annotate", args)),
 
         Cmd::FindBox { args } => cmd::find_box::run_from_args(prepend_prog("find-box", args)),
