@@ -1,5 +1,5 @@
 #!/bin/bash
-# End-to-end test for AlphaSplitter pipeline
+# End-to-end test for Alphabet pipeline
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"

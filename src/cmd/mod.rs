@@ -2,6 +2,7 @@ pub mod annotate_cenpb;
 pub mod build_hpc_hmms;
 pub mod cenpb_spacing;
 pub mod classify_reads;
+pub mod cut_v2;
 pub mod discover_chains;
 pub mod find_box;
 pub mod find_periodic_boxes;

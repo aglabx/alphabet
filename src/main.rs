@@ -1,11 +1,11 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-use alphasplitter::cmd;
+use alphabet::cmd;
 
 #[derive(Parser)]
 #[command(
-    name = "alphasplitter",
+    name = "alphabet",
     version,
     about = "Ab initio satellite DNA monomer alphabet discovery",
     arg_required_else_help = true
@@ -36,6 +36,12 @@ enum Cmd {
     },
     /// Cut arrays into monomers at chain-site boundaries; classify by letter
     Cut {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+    /// Multi-anchor position-aware monomer cutter (alpha satellite v2)
+    #[command(name = "cut-v2")]
+    CutV2 {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
@@ -114,7 +120,7 @@ enum DevCmd {
 }
 
 fn prepend_prog(subcmd: &str, args: Vec<String>) -> Vec<String> {
-    std::iter::once(format!("alphasplitter {}", subcmd))
+    std::iter::once(format!("alphabet {}", subcmd))
         .chain(args.into_iter())
         .collect()
 }
@@ -126,6 +132,7 @@ fn main() {
 
         Cmd::Discover { args } => cmd::discover_chains::run_from_args(prepend_prog("discover", args)),
         Cmd::Cut { args } => cmd::motif_cut::run_from_args(prepend_prog("cut", args)),
+        Cmd::CutV2 { args } => cmd::cut_v2::run_from_args(prepend_prog("cut-v2", args)),
         Cmd::Annotate { args } => cmd::annotate_cenpb::run_from_args(prepend_prog("annotate", args)),
 
         Cmd::FindBox { args } => cmd::find_box::run_from_args(prepend_prog("find-box", args)),
@@ -174,7 +181,7 @@ fn run_pipeline(input: PathBuf, outdir: PathBuf, threads: usize) {
 
     eprintln!("[1/3] discover → {}", chains_s);
     cmd::discover_chains::run_from_args(vec![
-        "alphasplitter discover".into(),
+        "alphabet discover".into(),
         input_s.clone(),
         "-o".into(), chains_s.clone(),
         "-t".into(), threads_s.clone(),
@@ -182,7 +189,7 @@ fn run_pipeline(input: PathBuf, outdir: PathBuf, threads: usize) {
 
     eprintln!("[2/3] cut → {}", monomers_s);
     cmd::motif_cut::run_from_args(vec![
-        "alphasplitter cut".into(),
+        "alphabet cut".into(),
         input_s,
         "-m".into(), chains_s,
         "-o".into(), monomers_s.clone(),
@@ -191,7 +198,7 @@ fn run_pipeline(input: PathBuf, outdir: PathBuf, threads: usize) {
 
     eprintln!("[3/3] annotate → {}", annotated_s);
     cmd::annotate_cenpb::run_from_args(vec![
-        "alphasplitter annotate".into(),
+        "alphabet annotate".into(),
         monomers_s,
         annotated_s,
     ]);

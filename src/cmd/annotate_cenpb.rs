@@ -34,7 +34,7 @@ pub fn run_from_args(args: Vec<String>) {
             continue;
         }
         if !header_done {
-            writeln!(out, "#alphasplitter v{} / annotate", env!("CARGO_PKG_VERSION")).unwrap();
+            writeln!(out, "#alphabet v{} / annotate", env!("CARGO_PKG_VERSION")).unwrap();
             writeln!(out, "#CENP-B_box_ref: nTTCGnnnnAnnCGGGn (17bp, searched on BOTH strands)").unwrap();
             writeln!(out, "#cenpb_labels: B+ (score==9), B? (score 7-8), B- (score<=6)").unwrap();
             writeln!(out, "#columns_added: {}", cenpb_cols.replace('\t', " ")).unwrap();
