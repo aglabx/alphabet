@@ -9,32 +9,38 @@ use alphabet::cmd::cut_v2::{cut_array, ArrayCut, Params};
 
 /// Build a 171-bp synthetic alpha monomer.
 ///
-/// All panel anchors are placed at their canonical positions, filler is `N`
-/// (no panel anchor contains N, so no incidental hits). A label byte at
-/// position 100 distinguishes letters A/B/V/… in cross-array tests.
+/// All 15 PANEL anchors are placed at their canonical positions, filler is
+/// `N` (no panel anchor contains N, so no incidental hits). A label byte at
+/// position 72 (inside the 7-bp gap between TCTTT@64 and ATCTG@76)
+/// distinguishes letters A/B/V/… in cross-array tests. `drop_landmark`
+/// G-fills the first 11 bp — kills only the GATGT@4 contribution; the
+/// other 14 anchors keep the score well above min_score.
 fn build_monomer(label: u8, drop_landmark: bool, drop_islands: &[&[u8]]) -> Vec<u8> {
     let length = 171;
     let mut seq = vec![b'N'; length];
-    seq[100] = label;
-
-    if drop_landmark {
-        for s in seq.iter_mut().take(11) {
-            *s = b'G';
-        }
-    } else {
-        for (i, c) in b"CTTTGTGATGT".iter().enumerate() {
-            seq[i] = *c;
-        }
-    }
+    seq[72] = label;
 
     let placements: &[(&[u8], usize)] = &[
-        (b"CATTC", 14),
-        (b"CAGAG", 25),
-        (b"CTTTT", 40),
-        (b"GTGGA", 86),
-        (b"TGGAA", 117),
-        (b"CAGAA", 149),
-        (b"AGAAA", 162),
+        (b"GATGT", 4),
+        (b"CATTC", 12),
+        (b"ACAGA", 22),
+        (b"TGAAC", 29),
+        (b"TCTTT", 37),
+        (b"AGCAG", 48),
+        (b"GAAAC", 57),
+        (b"TCTTT", 64),
+        (b"ATCTG", 76),
+        (b"GTGGA", 84),
+        (b"TTGGA", 92),
+        (b"GCTTT", 99),
+        (b"AGGCC", 105),
+        (b"TTGGA", 114),
+        (b"AAAGG", 119),
+        (b"TCTTC", 129),
+        (b"TAAAA", 137),
+        (b"ACAGA", 147),
+        (b"CATTC", 154),
+        (b"GAAAC", 162),
     ];
     for (anchor, pos) in placements {
         if drop_islands.iter().any(|d| d == anchor) {
@@ -45,6 +51,12 @@ fn build_monomer(label: u8, drop_landmark: bool, drop_islands: &[&[u8]]) -> Vec<
         }
         for (i, c) in anchor.iter().enumerate() {
             seq[pos + i] = *c;
+        }
+    }
+
+    if drop_landmark {
+        for s in seq.iter_mut().take(11) {
+            *s = b'G';
         }
     }
     seq
@@ -91,10 +103,7 @@ fn test_homo_aaaa() {
     assert_eq!(mons[0].len(), 171, "monomer length");
     let set: std::collections::HashSet<&Vec<u8>> = mons.iter().collect();
     assert_eq!(set.len(), 1, "homo array → all monomers identical");
-    assert!(
-        mons[0].starts_with(b"CTTTGTGATGT"),
-        "monomer should start at landmark"
-    );
+    assert_eq!(mons[0], a, "monomer should align with template (cut at pos 0)");
 }
 
 #[test]

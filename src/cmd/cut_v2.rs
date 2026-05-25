@@ -20,12 +20,33 @@ use rayon::prelude::*;
 
 use crate::io::read_fasta;
 
-/// Panel: (anchor sequence, canonical positions inside a monomer, tolerance bp, weight).
-///
-/// Derived empirically from clustering 3M monomer-position histograms across a
-/// 7-haplotype T2T panel — see the brief. Treat as load-bearing; don't tweak
-/// without a re-derivation experiment.
+/// Data-derived 15-cluster anchor grid (May 2026 re-derivation on 1.18M
+/// cut monomers from 7-haplotype T2T panel). Replaces the May 2025
+/// empirical 11-entry panel (preserved as PANEL_LEGACY below for
+/// comparison). Each entry uses the highest-DF 5-mer from its cluster
+/// as the single representative.
 pub const PANEL: &[(&[u8], &[usize], usize, f64)] = &[
+    // (5-mer, &[canonical_positions], tolerance, weight)
+    (b"GAAAC", &[57, 162], 3, 1.0),   // cluster_0  (66 members, DF 97.9%) — bi-pos
+    (b"ACAGA", &[147, 22], 3, 1.0),   // cluster_1  (63 members, DF 97.0%) — bi-pos
+    (b"TCTTT", &[64, 37],  3, 1.0),   // cluster_2  (61 members, DF 97.0%) — bi-pos
+    (b"TTGGA", &[92, 114], 3, 1.0),   // cluster_7  (58 members, DF 95.8%) — bi-pos
+    (b"CATTC", &[154, 12], 3, 1.0),   // cluster_3  (58 members, DF 95.6%) — bi-pos
+    (b"TCTTC", &[129],     3, 0.9),   // cluster_4  (32 members, DF 93.0%)
+    (b"GATGT", &[4],       3, 0.9),   // cluster_6  (26 members, DF 93.0%)
+    (b"ATCTG", &[76],      3, 0.9),   // cluster_8  (23 members, DF 91.9%)
+    (b"AGCAG", &[48],      3, 0.9),   // cluster_5  (30 members, DF 92.5%)
+    (b"TAAAA", &[137],     3, 0.9),   // cluster_10 (35 members, DF 92.4%)
+    (b"GTGGA", &[84],      3, 0.9),   // cluster_11 (25 members, DF 92.0%)
+    (b"AGGCC", &[105],     3, 0.85),  // cluster_16 (26 members, DF 85.9%)
+    (b"TGAAC", &[29],      3, 0.85),  // cluster_9  (20 members, DF 87.7%)
+    (b"AAAGG", &[119],     3, 0.85),  // cluster_13 (12 members, DF 86.1%)
+    (b"GCTTT", &[99],      3, 0.85),  // cluster_14 (17 members, DF 86.3%)
+];
+
+/// Old empirical 11-entry panel (May 2025). Preserved for benchmark
+/// comparison; not used by cut-v2 default.
+pub const PANEL_LEGACY: &[(&[u8], &[usize], usize, f64)] = &[
     (b"CTTTGTGATGT", &[0],         2,  2.0),
     (b"CAGAG",       &[25],        3,  1.0),
     (b"CTTTT",       &[40],        15, 0.5),
