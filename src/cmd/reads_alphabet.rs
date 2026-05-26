@@ -10,7 +10,6 @@ use crate::monomer::hpc;
 ///   4. Output: read_id, length, n_monomers, letter_string, site_positions
 ///
 /// Usage: reads_alphabet <satellite_reads.fasta> <chains.json>
-
 pub fn run_from_args(args: Vec<String>) {
     if args.len() < 3 {
         eprintln!("Usage: reads_alphabet <satellite_reads.fasta> <chains.json>");
@@ -45,12 +44,12 @@ pub fn run_from_args(args: Vec<String>) {
 
     for line in reader.lines() {
         let line = line.unwrap();
-        if line.starts_with('>') {
+        if let Some(rest) = line.strip_prefix('>') {
             if !name.is_empty() && !seq.is_empty() {
                 process_read(&name, &seq, &sites, &sites_hpc, &site_names, &mut out,
                     &mut total_reads, &mut total_monomers);
             }
-            name = line[1..].split_whitespace().next().unwrap_or(&line[1..]).to_string();
+            name = rest.split_whitespace().next().unwrap_or(rest).to_string();
             seq.clear();
         } else {
             seq.extend_from_slice(line.trim().as_bytes());
@@ -83,7 +82,7 @@ fn process_read(
     for (si, site) in sites.iter().enumerate() {
         if site.len() > seq_upper.len() { continue; }
         for i in 0..=seq_upper.len() - site.len() {
-            if &seq_upper[i..i + site.len()] == &site[..] {
+            if seq_upper[i..i + site.len()] == site[..] {
                 hits.push((i, i, si));
             }
         }
@@ -95,7 +94,7 @@ fn process_read(
     // Dedup: keep best hit within 5bp window
     let mut deduped: Vec<(usize, usize, usize)> = Vec::new();
     for h in &hits {
-        if deduped.last().map_or(true, |last: &(usize, usize, usize)| h.0.abs_diff(last.0) > 3) {
+        if deduped.last().is_none_or(|last: &(usize, usize, usize)| h.0.abs_diff(last.0) > 3) {
             deduped.push(*h);
         }
     }
@@ -148,7 +147,7 @@ fn process_read(
     writeln!(out, "{}\t{}\t{}\t{}\t{}\t{}",
         name, seq.len(), deduped.len(), n_monomers, letter_string, site_pos_str).unwrap();
 
-    if *total_reads % 10000 == 0 {
+    if (*total_reads).is_multiple_of(10000) {
         eprintln!("\r  {} reads, {} monomers", total_reads, total_monomers);
     }
 }

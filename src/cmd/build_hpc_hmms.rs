@@ -6,7 +6,6 @@ use crate::monomer::hpc;
 /// Outputs one FASTA per letter (top N letters by count).
 ///
 /// Usage: build_hpc_hmms <annotated.tsv> <outdir> [max_letters=30] [max_per_letter=200]
-
 pub fn run_from_args(args: Vec<String>) {
     if args.len() < 3 {
         eprintln!("Usage: build_hpc_hmms <annotated.tsv> <outdir> [max_letters=30] [max_per_letter=200]");
@@ -36,7 +35,7 @@ pub fn run_from_args(args: Vec<String>) {
 
     // Sort by count, take top N
     let mut sorted: Vec<_> = letter_counts.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
     sorted.truncate(max_letters);
 
     let target_letters: HashMap<String, usize> = sorted.iter().cloned().collect();
@@ -93,14 +92,14 @@ pub fn run_from_args(args: Vec<String>) {
     writeln!(script, "#!/bin/bash").unwrap();
     writeln!(script, "set -euo pipefail").unwrap();
     writeln!(script, "cd \"$(dirname \"$0\")\"").unwrap();
-    writeln!(script, "").unwrap();
+    writeln!(script).unwrap();
 
     for (letter, _) in &sorted {
         if !per_letter.contains_key(letter) { continue; }
         writeln!(script, "echo \"Building HMM for letter {}\"", letter).unwrap();
         writeln!(script, "muscle -align letter_{}.fasta -output letter_{}.afa 2>/dev/null", letter, letter).unwrap();
         writeln!(script, "hmmbuild --dna letter_{}.hmm letter_{}.afa >/dev/null 2>&1", letter, letter).unwrap();
-        writeln!(script, "").unwrap();
+        writeln!(script).unwrap();
     }
 
     // Concat all HMMs

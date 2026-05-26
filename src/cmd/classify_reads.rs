@@ -12,7 +12,6 @@ use crate::monomer::hpc;
 /// 4. Outputs per-read and per-monomer letter assignments
 ///
 /// Usage: classify_reads <reads.fasta> <chains.json> <alphabet.json> [threads]
-
 pub fn run_from_args(args: Vec<String>) {
     if args.len() < 4 {
         eprintln!("Usage: classify_reads <reads.fasta> <chains.json> <alphabet.json> [threads]");
@@ -25,13 +24,11 @@ pub fn run_from_args(args: Vec<String>) {
 
     // Load motifs: use the 5 chain sites from motif_cut v4 (not the 12 v1 motifs)
     // These are the sites that define the alphabet in v4_alphabet.json
-    let motifs = vec![
-        Motif { name: "a".into(), seq: b"ACATCACAAAG".to_vec(), position: 0 },
+    let motifs = [Motif { name: "a".into(), seq: b"ACATCACAAAG".to_vec(), position: 0 },
         Motif { name: "b".into(), seq: b"AGAATGCTTCT".to_vec(), position: 19 },
         Motif { name: "c".into(), seq: b"GAAGATATTTC".to_vec(), position: 32 },
         Motif { name: "d".into(), seq: b"TCCACTTGCAG".to_vec(), position: 54 },
-        Motif { name: "e".into(), seq: b"AAAGAGTGTTT".to_vec(), position: 111 },
-    ];
+        Motif { name: "e".into(), seq: b"AAAGAGTGTTT".to_vec(), position: 111 }];
     let _ = load_motifs(chains_path); // still parse for validation
     let n_motifs = motifs.len();
     eprintln!("Loaded {} motifs", n_motifs);
@@ -109,7 +106,7 @@ pub fn run_from_args(args: Vec<String>) {
         total_reads += batch.len();
 
         // Process batch in parallel
-        let chunk_size = (batch.len() + n_threads - 1) / n_threads;
+        let chunk_size = batch.len().div_ceil(n_threads);
         let batch = Arc::new(batch);
         let results: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let mut handles = Vec::new();
@@ -141,7 +138,7 @@ pub fn run_from_args(args: Vec<String>) {
                     for (mi, motif_hpc) in motifs_hpc.iter().enumerate() {
                         if motif_hpc.len() > seq_hpc.len() { continue; }
                         for i in 0..=seq_hpc.len() - motif_hpc.len() {
-                            if &seq_hpc[i..i + motif_hpc.len()] == &motif_hpc[..] {
+                            if seq_hpc[i..i + motif_hpc.len()] == motif_hpc[..] {
                                 hits.push((i, mi));
                             }
                         }
@@ -152,7 +149,7 @@ pub fn run_from_args(args: Vec<String>) {
                     for (mi, motif_orig) in motifs_orig.iter().enumerate() {
                         if motif_orig.len() > seq_upper.len() { continue; }
                         for i in 0..=seq_upper.len() - motif_orig.len() {
-                            if &seq_upper[i..i + motif_orig.len()] == &motif_orig[..] {
+                            if seq_upper[i..i + motif_orig.len()] == motif_orig[..] {
                                 // Map to HPC position
                                 let hpc_pos = orig_to_hpc_pos(&seq_upper, i);
                                 orig_hits.push((hpc_pos, mi));
@@ -172,7 +169,7 @@ pub fn run_from_args(args: Vec<String>) {
                     // Dedup within 3bp HPC window
                     let mut deduped: Vec<(usize, usize)> = Vec::new();
                     for h in &hits {
-                        if deduped.last().map_or(true, |last| h.0.abs_diff(last.0) > 2) {
+                        if deduped.last().is_none_or(|last| h.0.abs_diff(last.0) > 2) {
                             deduped.push(*h);
                         }
                     }
@@ -356,7 +353,7 @@ fn load_motifs(path: &str) -> Vec<Motif> {
         let mut seq = String::new();
         let mut pos = 0usize;
 
-        let start = if i >= 5 { i - 5 } else { 0 };
+        let start = i.saturating_sub(5);
         let end = (i + 5).min(lines.len());
         for j in start..end {
             let l = lines[j].trim();

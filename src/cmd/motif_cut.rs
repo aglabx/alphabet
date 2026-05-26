@@ -108,7 +108,7 @@ fn anchors_from_motifs(defs: &[MotifDef]) -> AnchorSet {
         if i + 1 < n {
             let next_pos = positions[i + 1];
             let this_end = positions[i] + seqs[i].len();
-            if next_pos > this_end { next_pos - this_end } else { 0 }
+            next_pos.saturating_sub(this_end)
         } else {
             20
         }
@@ -290,7 +290,7 @@ pub fn run_from_args(argv: Vec<String>) {
 
     // --- Read ALL arrays ---
     eprintln!("\nReading {}...", args.input);
-    let all_arrays = read_fasta(&args.input);
+    let all_arrays = read_fasta(&args.input).unwrap_or_else(|e| panic!("{:?}", e));
     eprintln!("  {} total arrays in fasta", all_arrays.len());
 
     // --- Partition arrays by family ---
@@ -327,7 +327,7 @@ pub fn run_from_args(argv: Vec<String>) {
 
     // --- Run the per-family pipeline ---
     let mut family_results: Vec<(Family, FamilyResult)> = Vec::new();
-    for (fam, fam_arrays) in families.into_iter().zip(buckets.into_iter()) {
+    for (fam, fam_arrays) in families.into_iter().zip(buckets) {
         if fam_arrays.is_empty() {
             eprintln!("\n===== Family {} : no arrays, skipping =====", fam.id);
             continue;
@@ -415,7 +415,7 @@ pub fn run_from_args(argv: Vec<String>) {
                 array_monomers.entry(m.array_id.clone()).or_default().push((m.monomer_idx, letter.to_string()));
             }
             let mut sorted_arrays: Vec<_> = array_monomers.iter().collect();
-            sorted_arrays.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+            sorted_arrays.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
             for (array_id, monomers) in &sorted_arrays {
                 let mut mono_sorted: Vec<_> = monomers.to_vec();
                 mono_sorted.sort_by_key(|m| m.0);
@@ -558,7 +558,7 @@ fn process_family(fam: &Family, family_arrays: &[(String, Vec<u8>)], args: &Args
         letter_members.entry(m.letter_key.clone()).or_default().push(i);
     }
     let mut letter_list: Vec<(String, Vec<usize>)> = letter_members.into_iter().collect();
-    letter_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    letter_list.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
 
     let mut letters: Vec<Letter> = Vec::new();
     let mut key_to_letter: HashMap<String, String> = HashMap::new();
@@ -583,7 +583,7 @@ fn process_family(fam: &Family, family_arrays: &[(String, Vec<u8>)], args: &Args
         let n_subtypes = subtype_counts.len();
         total_subtypes += n_subtypes;
         let mut subtype_list: Vec<(String, usize)> = subtype_counts.into_iter().collect();
-        subtype_list.sort_by(|a, b| b.1.cmp(&a.1));
+        subtype_list.sort_by_key(|b| std::cmp::Reverse(b.1));
         for (si, (skey, _)) in subtype_list.iter().enumerate() {
             key_to_subtype.insert(skey.clone(), format!("{}{}", letter_name, si + 1));
         }
@@ -693,7 +693,7 @@ fn cut_at_motifs(array_id: &str, family_id: &str, seq: &[u8], hits: &[MotifHit],
 
         // Skip if too short or too long
         let length = end_pos - start_pos;
-        if length < 100 || length > 400 { continue; }
+        if !(100..=400).contains(&length) { continue; }
 
         let mono_seq = &seq[start_pos..end_pos];
 
@@ -786,7 +786,7 @@ fn cut_at_motifs(array_id: &str, family_id: &str, seq: &[u8], hits: &[MotifHit],
         for mid in 0..n_motifs {
             if site_present[mid] && !mono_hits.iter().any(|&(si, _)| si == mid) {
                 // Inferred site: find its predicted position from nearest found neighbor
-                if let Some(&(prev_si, prev_pos)) = deduped_hits.iter().filter(|&&(si, _)| si < mid).last() {
+                if let Some(&(prev_si, prev_pos)) = deduped_hits.iter().rfind(|&&(si, _)| si < mid) {
                     let mut pred_offset = 0usize;
                     for k in prev_si..mid {
                         pred_offset += anchor_names[k].len();
@@ -847,7 +847,7 @@ fn cut_at_motifs(array_id: &str, family_id: &str, seq: &[u8], hits: &[MotifHit],
                 let letter = if si < site_letters.len() { site_letters[si] } else { '?' };
                 let cigar_part = if site_sequences[si].contains(':') {
                     // Inferred site with CIGAR: "seq:CIGAR"
-                    let cigar = site_sequences[si].split(':').last().unwrap_or("=");
+                    let cigar = site_sequences[si].split(':').next_back().unwrap_or("=");
                     if cigar != "=" { format!("{}[{}]", letter, cigar) } else { format!("{}", letter) }
                 } else {
                     format!("{}", letter)
@@ -858,7 +858,7 @@ fn cut_at_motifs(array_id: &str, family_id: &str, seq: &[u8], hits: &[MotifHit],
             }
             // gap_after: distance from last site end to monomer end
             let gap_after = if let Some(pe) = prev_end {
-                if mono_len > pe { mono_len - pe } else { 0 }
+                mono_len.saturating_sub(pe)
             } else { mono_len };
             parts.push(format!(":{}", gap_after));
 
@@ -969,7 +969,7 @@ fn dedup_hits(hits: &mut Vec<MotifHit>, motif_len: usize) {
 }
 
 fn hamming_bytes(a: &[u8], b: &[u8]) -> u32 {
-    a.iter().zip(b.iter()).filter(|(x, y)| x.to_ascii_uppercase() != y.to_ascii_uppercase()).count() as u32
+    a.iter().zip(b.iter()).filter(|(x, y)| !x.eq_ignore_ascii_case(y)).count() as u32
 }
 
 /// Simple NW alignment of reference motif to extracted region, returns CIGAR string
@@ -998,7 +998,7 @@ fn align_and_cigar(reference: &[u8], query: &[u8]) -> (String, String) {
 
     for i in 1..=n {
         for j in 1..=m {
-            let s = if reference[i-1].to_ascii_uppercase() == query[j-1].to_ascii_uppercase() {
+            let s = if reference[i-1].eq_ignore_ascii_case(&query[j-1]) {
                 match_score
             } else { mismatch };
             dm[i][j] = (dm[i-1][j-1].max(dx[i-1][j-1]).max(dy[i-1][j-1])) + s;
@@ -1027,8 +1027,8 @@ fn align_and_cigar(reference: &[u8], query: &[u8]) -> (String, String) {
     while i > 0 || j > 0 {
         match state {
             'M' if i > 0 && j > 0 => {
-                let _s = if reference[i-1].to_ascii_uppercase() == query[j-1].to_ascii_uppercase() { match_score } else { mismatch };
-                let op = if reference[i-1].to_ascii_uppercase() == query[j-1].to_ascii_uppercase() { 'M' } else { 'X' };
+                let _s = if reference[i-1].eq_ignore_ascii_case(&query[j-1]) { match_score } else { mismatch };
+                let op = if reference[i-1].eq_ignore_ascii_case(&query[j-1]) { 'M' } else { 'X' };
                 aligned_query.push(query[j-1]);
                 if let Some(last) = cigar_ops.last_mut() {
                     if last.0 == op { last.1 += 1; } else { cigar_ops.push((op, 1)); }

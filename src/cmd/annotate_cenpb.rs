@@ -56,7 +56,7 @@ pub fn run_from_args(args: Vec<String>) {
         let mut best_cigar17 = String::new();
         let mut best_seq = String::new();
 
-        for (strand_seq, strand) in [(&seq[..], '+'), (&rc[..], '-')] {
+        for (strand_seq, strand) in [(seq, '+'), (&rc[..], '-')] {
             if strand_seq.len() < 17 { continue; }
             for i in 0..strand_seq.len() - 16 {
                 let mut score = 0u32;

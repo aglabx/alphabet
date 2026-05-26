@@ -1,25 +1,37 @@
+//! FASTA / monomer-TSV I/O.
+//!
+//! All public functions return `anyhow::Result<T>` and attach `with_context`
+//! at every fallible step. The CLI dispatchers in `cmd/*` typically `?` or
+//! `.expect()` the result, so when something is corrupt the user sees the
+//! full chain — file path, line number, parse cause — rather than a bare
+//! `unwrap()` panic without provenance.
+
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
+
+use anyhow::{anyhow, Context, Result};
 
 use crate::monomer::Monomer;
 
 /// Read a FASTA file into `(name, sequence_bytes)` pairs. Sequences are
 /// uppercased on read so downstream code can assume ASCII-upper ACGTN.
-pub fn read_fasta(path: &str) -> Vec<(String, Vec<u8>)> {
-    let file = File::open(path).unwrap_or_else(|e| panic!("Cannot open {}: {}", path, e));
+pub fn read_fasta(path: &str) -> Result<Vec<(String, Vec<u8>)>> {
+    let file = File::open(path).with_context(|| format!("opening FASTA {}", path))?;
     let reader = BufReader::with_capacity(64 * 1024 * 1024, file);
     let mut arrays: Vec<(String, Vec<u8>)> = Vec::new();
     let mut name = String::new();
     let mut seq: Vec<u8> = Vec::new();
 
-    for line in reader.lines() {
-        let line = line.unwrap();
-        if line.starts_with('>') {
+    for (lineno, line) in reader.lines().enumerate() {
+        let line = line.with_context(|| {
+            format!("reading FASTA {} at line {}", path, lineno + 1)
+        })?;
+        if let Some(rest) = line.strip_prefix('>') {
             if !name.is_empty() && !seq.is_empty() {
                 arrays.push((std::mem::take(&mut name), std::mem::take(&mut seq)));
             }
-            name = line[1..].trim().to_string();
+            name = rest.trim().to_string();
             seq.clear();
         } else {
             seq.extend(line.trim().bytes().map(|b| b.to_ascii_uppercase()));
@@ -28,15 +40,19 @@ pub fn read_fasta(path: &str) -> Vec<(String, Vec<u8>)> {
     if !name.is_empty() && !seq.is_empty() {
         arrays.push((name, seq));
     }
-    arrays
+    Ok(arrays)
 }
 
 /// Same as [`read_fasta`] but returns the sequence as a `String` — convenient
 /// for callers that work with `&str` slices.
-pub fn read_fasta_strings(path: &str) -> Vec<(String, String)> {
-    read_fasta(path)
+pub fn read_fasta_strings(path: &str) -> Result<Vec<(String, String)>> {
+    read_fasta(path)?
         .into_iter()
-        .map(|(n, s)| (n, String::from_utf8(s).expect("non-UTF8 FASTA bytes")))
+        .map(|(n, s)| {
+            String::from_utf8(s)
+                .map(|s| (n.clone(), s))
+                .with_context(|| format!("non-UTF8 bytes in FASTA {} for record {}", path, n))
+        })
         .collect()
 }
 
@@ -46,8 +62,8 @@ pub fn read_monomers_tsv(
     path: &str,
     min_length: u32,
     max_length: u32,
-) -> (HashMap<String, Vec<Monomer>>, Stats) {
-    let file = File::open(path).unwrap_or_else(|e| panic!("Cannot open {}: {}", path, e));
+) -> Result<(HashMap<String, Vec<Monomer>>, Stats)> {
+    let file = File::open(path).with_context(|| format!("opening monomers TSV {}", path))?;
     let reader = BufReader::with_capacity(64 * 1024 * 1024, file);
 
     let mut arrays: HashMap<String, Vec<Monomer>> = HashMap::new();
@@ -56,28 +72,32 @@ pub fn read_monomers_tsv(
     let mut lines = reader.lines();
 
     // Parse header
-    let header_line = lines.next().expect("Empty file").expect("IO error");
+    let header_line = lines
+        .next()
+        .ok_or_else(|| anyhow!("monomers TSV {} is empty (no header line)", path))?
+        .with_context(|| format!("reading header of monomers TSV {}", path))?;
     let headers: Vec<&str> = header_line.split('\t').collect();
-    let col = |name: &str| -> usize {
-        headers.iter().position(|h| *h == name)
-            .unwrap_or_else(|| panic!("Column '{}' not found in header", name))
+    let col = |name: &str| -> Result<usize> {
+        headers
+            .iter()
+            .position(|h| *h == name)
+            .ok_or_else(|| anyhow!("column '{}' not found in header of {}", name, path))
     };
 
-    let col_array_id = col("array_id");
-    let col_type = col("type");
-    let col_idx = col("idx");
-    let col_length = col("length");
-    let col_period = col("period");
-    let col_source = col("source");
-    let col_ed_prev = col("ed_prev");
-    let col_ed_next = col("ed_next");
-    let col_sequence = col("sequence");
+    let col_array_id = col("array_id")?;
+    let col_type = col("type")?;
+    let col_idx = col("idx")?;
+    let col_length = col("length")?;
+    let col_period = col("period")?;
+    let col_source = col("source")?;
+    let col_ed_prev = col("ed_prev")?;
+    let col_ed_next = col("ed_next")?;
+    let col_sequence = col("sequence")?;
 
-    for line_result in lines {
-        let line = match line_result {
-            Ok(l) => l,
-            Err(_) => continue,
-        };
+    for (lineno, line_result) in lines.enumerate() {
+        let line = line_result.with_context(|| {
+            format!("reading monomers TSV {} at line {}", path, lineno + 2)
+        })?;
         stats.total_rows += 1;
 
         let fields: Vec<&str> = line.split('\t').collect();
@@ -141,7 +161,7 @@ pub fn read_monomers_tsv(
     stats.n_monomers = arrays.values().map(|v| v.len() as u64).sum();
     stats.n_arrays = arrays.len() as u64;
 
-    (arrays, stats)
+    Ok((arrays, stats))
 }
 
 #[derive(Default, Debug, serde::Serialize)]
@@ -158,12 +178,13 @@ pub struct Stats {
 }
 
 /// Write canonical monomers to TSV
-pub fn write_monomers_tsv(path: &str, arrays: &HashMap<String, Vec<Monomer>>) {
+pub fn write_monomers_tsv(path: &str, arrays: &HashMap<String, Vec<Monomer>>) -> Result<()> {
     use std::io::Write;
-    let file = File::create(path).unwrap_or_else(|e| panic!("Cannot create {}: {}", path, e));
+    let file = File::create(path).with_context(|| format!("creating monomers TSV {}", path))?;
     let mut writer = std::io::BufWriter::with_capacity(64 * 1024 * 1024, file);
 
-    writeln!(writer, "array_id\tidx\tlength\tperiod\tsource\ted_prev\ted_next\tstrand_flipped\trotation_offset\tanchor_confidence\tsequence").unwrap();
+    writeln!(writer, "array_id\tidx\tlength\tperiod\tsource\ted_prev\ted_next\tstrand_flipped\trotation_offset\tanchor_confidence\tsequence")
+        .with_context(|| format!("writing header to {}", path))?;
 
     // Collect and sort all monomers
     let mut all: Vec<&Monomer> = arrays.values().flat_map(|v| v.iter()).collect();
@@ -176,6 +197,8 @@ pub fn write_monomers_tsv(path: &str, arrays: &HashMap<String, Vec<Monomer>>) {
             m.array_id, m.idx, m.length, m.period, m.source,
             m.ed_prev, m.ed_next, m.strand_flipped, m.rotation_offset,
             m.anchor_confidence, m.sequence
-        ).unwrap();
+        )
+        .with_context(|| format!("writing row to {}", path))?;
     }
+    Ok(())
 }

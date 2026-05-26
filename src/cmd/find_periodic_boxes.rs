@@ -19,7 +19,7 @@ pub fn run_from_args(args: Vec<String>) {
     let max_fixed: usize = 12;
     let min_pairs: usize = 50;
 
-    let arrays = Arc::new(read_fasta_strings(input));
+    let arrays = Arc::new(read_fasta_strings(input).unwrap_or_else(|e| panic!("{:?}", e)));
     let total_bp: usize = arrays.iter().map(|(_, s)| s.len()).sum();
     let n_mon = total_bp as f64 / 717.0;
     eprintln!("{} arrays, {:.2}Mb, ~{:.0} monomers", arrays.len(), total_bp as f64 / 1e6, n_mon);
@@ -87,7 +87,7 @@ pub fn run_from_args(args: Vec<String>) {
     let mut sorted_patterns: Vec<_> = pattern_counts.into_iter()
         .filter(|(_, c)| *c >= min_pairs)
         .collect();
-    sorted_patterns.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted_patterns.sort_by_key(|b| std::cmp::Reverse(b.1));
     sorted_patterns.truncate(200);
 
     eprintln!("{} patterns with >= {} pairs", sorted_patterns.len(), min_pairs);
@@ -188,7 +188,7 @@ pub fn run_from_args(args: Vec<String>) {
     for h in handles { h.join().unwrap(); }
 
     let mut results = Arc::try_unwrap(results_lock).unwrap().into_inner().unwrap();
-    results.sort_by(|a, b| b.on_target.cmp(&a.on_target));
+    results.sort_by_key(|b| std::cmp::Reverse(b.on_target));
 
     println!("# Periodic box candidates");
     println!("# Target spacing: {}-{}bp", min_spacing, max_spacing);

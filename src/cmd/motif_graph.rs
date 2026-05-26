@@ -129,7 +129,7 @@ pub fn run_from_args(argv: Vec<String>) {
     eprintln!("  Arrays with hits: {}/{}", arrays_with_hits, arrays.len());
 
     // Count per motif
-    let mut per_motif = vec![0usize; 5];
+    let mut per_motif = [0usize; 5];
     for (_, _, hits) in &array_hits {
         for h in hits {
             per_motif[h.motif_idx] += 1;
@@ -180,7 +180,7 @@ pub fn run_from_args(argv: Vec<String>) {
             fraction: c as f64 / total_edge_count as f64,
         }
     }).collect();
-    edge_stats.sort_by(|a, b| b.count.cmp(&a.count));
+    edge_stats.sort_by_key(|b| std::cmp::Reverse(b.count));
 
     eprintln!("\n=== TOP 30 EDGES ===");
     eprintln!("{:<5} {:<5} {:>8} {:>8} {:>6}", "from", "to", "linker", "count", "%");
@@ -223,7 +223,7 @@ pub fn run_from_args(argv: Vec<String>) {
         canonical_pairs.push(CanonicalPair {
             from: from.to_string(),
             to: to.to_string(),
-            expected_distance: expected as i32,
+            expected_distance: expected,
             median_observed: median,
             count: total,
             length_distribution: lengths.iter().take(20).cloned().collect(),
@@ -361,7 +361,7 @@ fn dedup_hits(hits: &mut Vec<MotifHit>, motif_len: usize) {
 fn hamming_bytes(a: &[u8], b: &[u8]) -> u32 {
     let mut d = 0u32;
     for i in 0..a.len().min(b.len()) {
-        if a[i].to_ascii_uppercase() != b[i].to_ascii_uppercase() { d += 1; }
+        if !a[i].eq_ignore_ascii_case(&b[i]) { d += 1; }
     }
     d
 }
@@ -370,6 +370,7 @@ fn hamming_bytes(a: &[u8], b: &[u8]) -> u32 {
 
 fn read_alpha_arrays(path: &str) -> Vec<(String, Vec<u8>)> {
     read_fasta(path)
+        .unwrap_or_else(|e| panic!("{:?}", e))
         .into_iter()
         .filter(|(name, _)| {
             let fields: Vec<&str> = name.split('_').collect();

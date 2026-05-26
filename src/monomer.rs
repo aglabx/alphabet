@@ -105,14 +105,14 @@ pub fn build_anchor_kmers(seed: &[u8], k: usize, top_n: usize) -> std::collectio
         }
     }
     let mut pairs: Vec<_> = counts.into_iter().collect();
-    pairs.sort_by(|a, b| b.1.cmp(&a.1));
+    pairs.sort_by_key(|b| std::cmp::Reverse(b.1));
     pairs.into_iter().take(top_n).map(|(h, _)| h).collect()
 }
 
 /// Cyclic rotation of a sequence
 pub fn cyclic_rotate(seq: &[u8], offset: usize) -> Vec<u8> {
     let n = seq.len();
-    if n == 0 || offset % n == 0 {
+    if n == 0 || offset.is_multiple_of(n) {
         return seq.to_vec();
     }
     let off = offset % n;
