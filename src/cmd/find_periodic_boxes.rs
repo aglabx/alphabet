@@ -87,7 +87,7 @@ pub fn run_from_args(args: Vec<String>) {
     let mut sorted_patterns: Vec<_> = pattern_counts.into_iter()
         .filter(|(_, c)| *c >= min_pairs)
         .collect();
-    sorted_patterns.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted_patterns.sort_by_key(|b| std::cmp::Reverse(b.1));
     sorted_patterns.truncate(200);
 
     eprintln!("{} patterns with >= {} pairs", sorted_patterns.len(), min_pairs);
@@ -188,7 +188,7 @@ pub fn run_from_args(args: Vec<String>) {
     for h in handles { h.join().unwrap(); }
 
     let mut results = Arc::try_unwrap(results_lock).unwrap().into_inner().unwrap();
-    results.sort_by(|a, b| b.on_target.cmp(&a.on_target));
+    results.sort_by_key(|b| std::cmp::Reverse(b.on_target));
 
     println!("# Periodic box candidates");
     println!("# Target spacing: {}-{}bp", min_spacing, max_spacing);

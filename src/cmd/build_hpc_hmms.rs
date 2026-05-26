@@ -35,7 +35,7 @@ pub fn run_from_args(args: Vec<String>) {
 
     // Sort by count, take top N
     let mut sorted: Vec<_> = letter_counts.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
     sorted.truncate(max_letters);
 
     let target_letters: HashMap<String, usize> = sorted.iter().cloned().collect();

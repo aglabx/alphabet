@@ -77,7 +77,7 @@ pub fn run_from_args(argv: Vec<String>) {
         let period: usize = fields.last().and_then(|s| s.parse().ok()).unwrap_or(0);
         period.abs_diff(p) <= args.period_tol && seq.len() >= args.min_array_len
     }).collect();
-    arrays.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    arrays.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
     arrays.truncate(args.max_arrays);
     eprintln!("  {} arrays selected (period ~{}, len >= {})", arrays.len(), p, args.min_array_len);
 
@@ -220,7 +220,7 @@ pub fn run_from_args(argv: Vec<String>) {
             *shift_counts.entry(s).or_insert(0) += 1;
         }
         let mut sorted: Vec<(usize, usize)> = shift_counts.into_iter().collect();
-        sorted.sort_by(|a, b| b.1.cmp(&a.1));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
 
         eprintln!("\n=== FAMILY CANONICAL PHASE ===");
         eprintln!("Top shifts:");

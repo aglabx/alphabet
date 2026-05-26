@@ -327,7 +327,7 @@ pub fn run_from_args(argv: Vec<String>) {
 
     // --- Run the per-family pipeline ---
     let mut family_results: Vec<(Family, FamilyResult)> = Vec::new();
-    for (fam, fam_arrays) in families.into_iter().zip(buckets.into_iter()) {
+    for (fam, fam_arrays) in families.into_iter().zip(buckets) {
         if fam_arrays.is_empty() {
             eprintln!("\n===== Family {} : no arrays, skipping =====", fam.id);
             continue;
@@ -415,7 +415,7 @@ pub fn run_from_args(argv: Vec<String>) {
                 array_monomers.entry(m.array_id.clone()).or_default().push((m.monomer_idx, letter.to_string()));
             }
             let mut sorted_arrays: Vec<_> = array_monomers.iter().collect();
-            sorted_arrays.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+            sorted_arrays.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
             for (array_id, monomers) in &sorted_arrays {
                 let mut mono_sorted: Vec<_> = monomers.to_vec();
                 mono_sorted.sort_by_key(|m| m.0);
@@ -558,7 +558,7 @@ fn process_family(fam: &Family, family_arrays: &[(String, Vec<u8>)], args: &Args
         letter_members.entry(m.letter_key.clone()).or_default().push(i);
     }
     let mut letter_list: Vec<(String, Vec<usize>)> = letter_members.into_iter().collect();
-    letter_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    letter_list.sort_by_key(|b| std::cmp::Reverse(b.1.len()));
 
     let mut letters: Vec<Letter> = Vec::new();
     let mut key_to_letter: HashMap<String, String> = HashMap::new();
@@ -583,7 +583,7 @@ fn process_family(fam: &Family, family_arrays: &[(String, Vec<u8>)], args: &Args
         let n_subtypes = subtype_counts.len();
         total_subtypes += n_subtypes;
         let mut subtype_list: Vec<(String, usize)> = subtype_counts.into_iter().collect();
-        subtype_list.sort_by(|a, b| b.1.cmp(&a.1));
+        subtype_list.sort_by_key(|b| std::cmp::Reverse(b.1));
         for (si, (skey, _)) in subtype_list.iter().enumerate() {
             key_to_subtype.insert(skey.clone(), format!("{}{}", letter_name, si + 1));
         }

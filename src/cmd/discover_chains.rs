@@ -517,7 +517,7 @@ pub fn run_from_args(argv: Vec<String>) {
         };
 
         // Site is "present" only if it has sufficient occupancy (≥50% of expected monomers)
-        let expected_monomers = if p > 0 { (seq.len() / p).max(1) } else { 1 };
+        let expected_monomers = seq.len().checked_div(p).unwrap_or(1).max(1);
         let min_hits = (expected_monomers as f64 * 0.3).max(3.0) as usize; // ≥30% occupancy, min 3 hits
         let site_present: Vec<bool> = positions.iter().map(|v| v.len() >= min_hits).collect();
         let n_sites_present = site_present.iter().filter(|&&b| b).count();
@@ -616,7 +616,7 @@ pub fn run_from_args(argv: Vec<String>) {
         *pcounts.entry(a.period).or_insert(0) += 1;
     }
     let mut periods: Vec<(usize, usize)> = pcounts.into_iter().collect();
-    periods.sort_by(|a, b| b.1.cmp(&a.1));
+    periods.sort_by_key(|b| std::cmp::Reverse(b.1));
     eprintln!("  Periods: {}", periods.iter().take(8)
         .map(|(p, c)| format!("{}x{}", p, c)).collect::<Vec<_>>().join(", "));
 

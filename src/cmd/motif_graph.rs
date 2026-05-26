@@ -180,7 +180,7 @@ pub fn run_from_args(argv: Vec<String>) {
             fraction: c as f64 / total_edge_count as f64,
         }
     }).collect();
-    edge_stats.sort_by(|a, b| b.count.cmp(&a.count));
+    edge_stats.sort_by_key(|b| std::cmp::Reverse(b.count));
 
     eprintln!("\n=== TOP 30 EDGES ===");
     eprintln!("{:<5} {:<5} {:>8} {:>8} {:>6}", "from", "to", "linker", "count", "%");
