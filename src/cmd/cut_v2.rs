@@ -508,7 +508,7 @@ pub fn run_from_args(argv: Vec<String>) {
     let mut records: Vec<(String, Vec<u8>)> = Vec::new();
     for path in &args.fasta {
         eprintln!("Reading {}...", path);
-        let r = read_fasta(path);
+        let r = read_fasta(path).unwrap_or_else(|e| panic!("{:?}", e));
         eprintln!("  {} records", r.len());
         records.extend(r);
     }

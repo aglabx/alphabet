@@ -10,7 +10,9 @@ use crate::monomer::revcomp;
 /// For .gz files uses pigz/gzip via pipe — no Rust gz dependency needed.
 ///
 /// Usage: scan_reads <input.fastq.gz|.fasta|.fastq> [threads] [--pattern NAME:PATTERN ...]
-
+//
+// See reads_extract.rs for the rationale on not `.wait()`ing the decompressor.
+#[allow(clippy::zombie_processes)]
 pub fn run_from_args(args: Vec<String>) {
     if args.len() < 2 {
         eprintln!("Usage: scan_reads <input.fastq.gz|.fasta|.fastq> [threads] [--pattern NAME:PATTERN ...]");
@@ -128,7 +130,7 @@ pub fn run_from_args(args: Vec<String>) {
         }
 
         // Process batch in parallel
-        let chunk_size = (batch.len() + n_threads - 1) / n_threads;
+        let chunk_size = batch.len().div_ceil(n_threads);
         let batch_arc = Arc::new(batch);
         let mut handles = Vec::new();
 

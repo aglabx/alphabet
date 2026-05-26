@@ -68,7 +68,7 @@ pub fn run_from_args(argv: Vec<String>) {
 
     // Read arrays
     eprintln!("Reading {}...", args.input);
-    let all_arrays = read_fasta(&args.input);
+    let all_arrays = read_fasta(&args.input).unwrap_or_else(|e| panic!("{:?}", e));
     eprintln!("  {} total arrays", all_arrays.len());
 
     // Filter: period-matched, large enough

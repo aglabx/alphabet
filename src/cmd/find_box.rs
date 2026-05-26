@@ -32,7 +32,7 @@ pub fn run_from_args(argv: Vec<String>) {
     eprintln!("Pattern: {} ({}bp, {} fixed positions)", args.pattern, plen, n_fixed);
 
     // Read ALL arrays
-    let arrays = read_fasta_strings(&args.input);
+    let arrays = read_fasta_strings(&args.input).unwrap_or_else(|e| panic!("{:?}", e));
     let total_bp: usize = arrays.iter().map(|(_, s)| s.len()).sum();
     eprintln!("{} arrays, {:.1}Mb", arrays.len(), total_bp as f64 / 1e6);
 
@@ -57,7 +57,7 @@ pub fn run_from_args(argv: Vec<String>) {
         // dedup
         let mut deduped = Vec::new();
         for h in &hits {
-            if deduped.last().map_or(true, |last: &(usize, u32, char)| h.0.abs_diff(last.0) > 10) {
+            if deduped.last().is_none_or(|last: &(usize, u32, char)| h.0.abs_diff(last.0) > 10) {
                 deduped.push(*h);
             }
         }

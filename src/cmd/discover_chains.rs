@@ -172,7 +172,7 @@ pub fn run_from_args(argv: Vec<String>) {
 
     // --- Read arrays ---
     eprintln!("Reading {}...", args.input);
-    let all_arrays = read_fasta(&args.input);
+    let all_arrays = read_fasta(&args.input).unwrap_or_else(|e| panic!("{:?}", e));
     eprintln!("  {} total arrays", all_arrays.len());
 
     // --- Detect periods ---
@@ -497,16 +497,14 @@ pub fn run_from_args(argv: Vec<String>) {
             // Exact match only — fuzzy is wrong, grammar check handles specificity
             for i in 0..=(seq.len() - slen) {
                 let w = &seq[i..i + slen];
-                if w == fwd.as_slice() {
-                    if fwd_positions[si].last().map_or(true, |&last| i - last >= slen) {
+                if w == fwd.as_slice()
+                    && fwd_positions[si].last().is_none_or(|&last| i - last >= slen) {
                         fwd_positions[si].push(i);
                     }
-                }
-                if w == rc.as_slice() {
-                    if rc_positions[si].last().map_or(true, |&last| i - last >= slen) {
+                if w == rc.as_slice()
+                    && rc_positions[si].last().is_none_or(|&last| i - last >= slen) {
                         rc_positions[si].push(i);
                     }
-                }
             }
         }
 
@@ -815,9 +813,9 @@ fn grow_sites(sites: Vec<Site>, arrays: &[(String, Vec<u8>)], _n_arrays: usize, 
                     let mut ctx = vec![b'N'; context_len];
                     let dst_start = max_extend - offset;
                     let src_len = ctx_end - ctx_start;
-                    for j in 0..src_len.min(context_len.saturating_sub(dst_start)) {
-                        ctx[dst_start + j] = seq[ctx_start + j];
-                    }
+                    let copy_len = src_len.min(context_len.saturating_sub(dst_start));
+                    ctx[dst_start..dst_start + copy_len]
+                        .copy_from_slice(&seq[ctx_start..ctx_start + copy_len]);
                     found.push(ctx);
                 }
             }

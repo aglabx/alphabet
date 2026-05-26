@@ -112,7 +112,7 @@ pub fn build_anchor_kmers(seed: &[u8], k: usize, top_n: usize) -> std::collectio
 /// Cyclic rotation of a sequence
 pub fn cyclic_rotate(seq: &[u8], offset: usize) -> Vec<u8> {
     let n = seq.len();
-    if n == 0 || offset % n == 0 {
+    if n == 0 || offset.is_multiple_of(n) {
         return seq.to_vec();
     }
     let off = offset % n;

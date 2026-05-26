@@ -19,7 +19,7 @@ pub fn run_from_args(args: Vec<String>) {
     let max_fixed: usize = 12;
     let min_pairs: usize = 50;
 
-    let arrays = Arc::new(read_fasta_strings(input));
+    let arrays = Arc::new(read_fasta_strings(input).unwrap_or_else(|e| panic!("{:?}", e)));
     let total_bp: usize = arrays.iter().map(|(_, s)| s.len()).sum();
     let n_mon = total_bp as f64 / 717.0;
     eprintln!("{} arrays, {:.2}Mb, ~{:.0} monomers", arrays.len(), total_bp as f64 / 1e6, n_mon);

@@ -9,7 +9,13 @@ use crate::monomer::{hpc, revcomp};
 /// A read passes only if motifs appear in chain order at expected spacing.
 ///
 /// Usage: reads_extract <input.fastq.gz> <chains.json> [min_chain_hits=3]
-
+//
+// The decompressor child is intentionally not `.wait()`ed: it's a single
+// streaming pipe whose lifetime equals this whole subcommand's stdin reader.
+// When `run_from_args` returns, the child gets SIGPIPE and exits; the OS
+// reaps it before this process exits. Refactoring to track the Child handle
+// would mean threading it through the `Box<dyn IoRead>` reader abstraction.
+#[allow(clippy::zombie_processes)]
 pub fn run_from_args(args: Vec<String>) {
     if args.len() < 3 {
         eprintln!("Usage: reads_extract <input.fastq.gz> <chains.json> [min_chain_hits=3]");
@@ -99,7 +105,7 @@ pub fn run_from_args(args: Vec<String>) {
         if batch.is_empty() { break; }
 
         // Process batch in parallel
-        let chunk_size = (batch.len() + n_threads - 1) / n_threads;
+        let chunk_size = batch.len().div_ceil(n_threads);
         let batch_arc = Arc::new(batch);
         let mut handles = Vec::new();
         let results: Arc<Mutex<Vec<(String, String, usize)>>> = Arc::new(Mutex::new(Vec::new()));
@@ -182,7 +188,7 @@ fn check_chain_grammar(
     for (mi, motif) in chain.motifs.iter().enumerate() {
         if motif.seq.len() > seq.len() { continue; }
         for i in 0..=seq.len() - motif.seq.len() {
-            if &seq[i..i + motif.seq.len()] == &motif.seq[..] {
+            if seq[i..i + motif.seq.len()] == motif.seq[..] {
                 hits.push((i, mi));
             }
         }
@@ -265,7 +271,7 @@ fn load_chain(path: &str) -> Chain {
             let mut pos = 0usize;
 
             // Scan nearby lines for name, sequence, position
-            let start = if i >= 5 { i - 5 } else { 0 };
+            let start = i.saturating_sub(5);
             let end = (i + 5).min(lines.len());
             for j in start..end {
                 let l = lines[j].trim();

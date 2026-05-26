@@ -121,7 +121,7 @@ enum DevCmd {
 
 fn prepend_prog(subcmd: &str, args: Vec<String>) -> Vec<String> {
     std::iter::once(format!("alphabet {}", subcmd))
-        .chain(args.into_iter())
+        .chain(args)
         .collect()
 }
 
