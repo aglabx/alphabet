@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 
-use crate::anchor_detect::SCAFFOLD_PANEL;
+use crate::anchor_detect::{calibrate_panel, SCAFFOLD_PANEL};
 use crate::anchor_scaffold::{
     aligned_row, run_em, update_tally, Cause, ColumnTally, EmParams, MonomerOutcome, Stream,
 };
@@ -111,6 +111,19 @@ fn run(args: Args) -> Result<()> {
     std::fs::create_dir_all(&args.outdir)
         .with_context(|| format!("create outdir {}", args.outdir.display()))?;
 
+    // Calibrate the panel to the seed-consensus frame: piece extraction slices
+    // the consensus at these positions, so they must match where the anchors
+    // actually sit in the seed (a fixture-derived panel is ~3 bp off and every
+    // piece gets sliced off-register → the all-dots MSA).
+    let panel = calibrate_panel(SCAFFOLD_PANEL, &seed_seq, 12, 2);
+    let moved: Vec<String> = panel
+        .iter()
+        .zip(SCAFFOLD_PANEL)
+        .filter(|(c, o)| c.canonical_pos != o.canonical_pos)
+        .map(|(c, o)| format!("{} {}->{}", c.label, o.canonical_pos, c.canonical_pos))
+        .collect();
+    eprintln!("Calibrated panel to seed frame: {} slots moved [{}]", moved.len(), moved.join(", "));
+
     let params = EmParams {
         max_rounds: args.max_rounds,
         convergence_threshold: args.converge,
@@ -120,7 +133,7 @@ fn run(args: Args) -> Result<()> {
     };
 
     let t_em = std::time::Instant::now();
-    let result = run_em(&seed_seq, &monomers, SCAFFOLD_PANEL, &params);
+    let result = run_em(&seed_seq, &monomers, &panel, &params);
     let dt_em = t_em.elapsed();
 
     let (n_std, n_out, n_exc, cause_counts) = emit_jsonl(&args.outdir, &result.final_outcomes)?;

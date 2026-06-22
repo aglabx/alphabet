@@ -177,6 +177,58 @@ fn gap_tol(canon_gap: i64) -> i64 {
     3 + (canon_gap.abs() * 2) / 10
 }
 
+/// Re-position each panel slot to where its k-mer actually sits in `consensus`:
+/// the lowest-Hamming match within ±`window` of the slot's declared
+/// `canonical_pos` (hd ≤ `max_hd`; ties → closest to the declared position).
+///
+/// Fixes a frame mismatch between a fixture-derived panel and a data-derived
+/// seed consensus: piece extraction slices the consensus at these positions, so
+/// they MUST be in the consensus frame, or every piece is sliced off-register and
+/// fails the band (BTN-scaffold-panel-fixed-windows-dont-transfer / the all-dots
+/// MSA). The ±window is small enough that bi-positional anchors (CATTC@14 vs
+/// @155) stay disambiguated. Slots with no match keep their declared position.
+pub fn calibrate_panel(
+    panel: &[PanelEntry],
+    consensus: &[u8],
+    window: usize,
+    max_hd: usize,
+) -> Vec<PanelEntry> {
+    panel
+        .iter()
+        .map(|e| {
+            let k = e.kmer.len();
+            let mut best: Option<(usize, usize)> = None; // (hd, pos)
+            if consensus.len() >= k {
+                let last = consensus.len() - k;
+                let lo = e.canonical_pos.saturating_sub(window);
+                let hi = (e.canonical_pos + window).min(last);
+                for pos in lo..=hi {
+                    let hd = hamming(&consensus[pos..pos + k], e.kmer);
+                    if hd > max_hd {
+                        continue;
+                    }
+                    let better = match best {
+                        None => true,
+                        Some((bh, bp)) => {
+                            hd < bh
+                                || (hd == bh
+                                    && pos.abs_diff(e.canonical_pos) < bp.abs_diff(e.canonical_pos))
+                        }
+                    };
+                    if better {
+                        best = Some((hd, pos));
+                    }
+                }
+            }
+            let mut ne = e.clone();
+            if let Some((_, pos)) = best {
+                ne.canonical_pos = pos;
+            }
+            ne
+        })
+        .collect()
+}
+
 /// Relative-chaining anchor detection (BTN-scaffold-panel-fixed-windows-dont-transfer).
 ///
 /// Unlike [`detect_anchors`] (fixed absolute ±tolerance windows from monomer
@@ -456,5 +508,23 @@ mod tests {
     #[test]
     fn chained_empty_on_no_candidates() {
         assert!(detect_anchors_chained(SCAFFOLD_PANEL, b"NNNNNNNNNN", 0).is_empty());
+    }
+
+    #[test]
+    fn calibrate_keeps_aligned_and_finds_shifted() {
+        // CONS_171 has anchors at exact canonical positions → no movement.
+        let cal = calibrate_panel(SCAFFOLD_PANEL, CONS_171, 12, 2);
+        for (c, o) in cal.iter().zip(SCAFFOLD_PANEL) {
+            assert_eq!(c.canonical_pos, o.canonical_pos, "{} moved", c.label);
+        }
+        // Move slot4's GTGGA from 86 to 84; calibration must follow it.
+        let mut m = CONS_171.to_vec();
+        for (j, b) in m.iter_mut().enumerate().take(93).skip(84) {
+            *b = b"ATGC"[j % 4];
+        }
+        m[84..89].copy_from_slice(b"GTGGA");
+        let cal = calibrate_panel(SCAFFOLD_PANEL, &m, 12, 2);
+        let slot4 = cal.iter().find(|e| e.label == "slot4").unwrap();
+        assert_eq!(slot4.canonical_pos, 84, "slot4 should calibrate to 84");
     }
 }
