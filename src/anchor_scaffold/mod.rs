@@ -1,5 +1,9 @@
 //! Chain + piece extraction for the anchor-scaffold MSA pipeline.
 //!
+//! Submodules:
+//!   * (this file) — Chain, Piece, extract_pieces
+//!   * `consensus` — ColumnTally, process_monomer, run_em (star MSA + EM)
+//!
 //! Brief: `docs/anchor_scaffold_msa_brief.md` § Core modules / 1-2.
 //!
 //! Stages handled here:
@@ -15,6 +19,9 @@
 //! Pieces are pure metadata: they carry monomer/canonical spans and panel
 //! anchor handles. Sequence slicing is done by helpers on the monomer/
 //! consensus buffers the caller already owns.
+
+pub mod consensus;
+pub use consensus::*;
 
 use crate::anchor_detect::{AnchorHit, PanelEntry, Role};
 
