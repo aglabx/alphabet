@@ -236,7 +236,8 @@ fn base_idx(b: u8) -> Option<usize> {
 ///   * `Del{col}` overrides to gap
 ///   * `Ins{col, base}` is ignored at the column level (lives between cols)
 pub fn update_tally(tally: &mut ColumnTally, outcome: &MonomerOutcome, consensus: &[u8]) {
-    if outcome.stream != Stream::Standard {
+    // Exceptions (no usable anchor chain) contribute nothing.
+    if outcome.stream == Stream::Exception {
         return;
     }
     assert_eq!(
@@ -247,10 +248,9 @@ pub fn update_tally(tally: &mut ColumnTally, outcome: &MonomerOutcome, consensus
 
     // Bytes shorter than allocating a full per-column override map: use
     // u8 with sentinel 0xFF for "no override; use consensus[col]".
-    let mut overrides = vec![0u8; consensus.len()];
     const NONE: u8 = 0xFF;
     const GAP: u8 = b'-';
-    overrides.fill(NONE);
+    let mut overrides = vec![NONE; consensus.len()];
 
     for op in &outcome.edit_script {
         match *op {
@@ -268,7 +268,43 @@ pub fn update_tally(tally: &mut ColumnTally, outcome: &MonomerOutcome, consensus
         }
     }
 
+    // Which canonical columns this monomer actually aligned and may vote on.
+    //   * STANDARD: every column (all pieces aligned) — unchanged behaviour.
+    //   * OUTLIER: partial-tally — the anchored extent
+    //     [first_anchor .. last_anchor] MINUS the canonical spans of pieces that
+    //     failed the band. Those failed columns have no alignment, so voting the
+    //     consensus base there would fabricate data. Flanks outside the lattice
+    //     extent are likewise uncovered. This realises "align between the present
+    //     anchors" — a divergent gap costs only its own columns, not the whole
+    //     monomer (BTN-scaffold-band-too-tight-starves-column-profile).
+    let covered: Option<Vec<bool>> = if outcome.stream == Stream::Outlier {
+        let mut mask = vec![false; consensus.len()];
+        if let (Some(first), Some(last)) = (
+            outcome.anchors.iter().map(|a| a.canonical_pos).min(),
+            outcome.anchors.iter().map(|a| a.canonical_pos).max(),
+        ) {
+            let hi = last.min(consensus.len().saturating_sub(1));
+            for c in mask.iter_mut().take(hi + 1).skip(first) {
+                *c = true;
+            }
+            for p in &outcome.pieces {
+                let (s, e) = p.canonical_span;
+                for c in mask.iter_mut().take(e.min(consensus.len())).skip(s) {
+                    *c = false;
+                }
+            }
+        }
+        Some(mask)
+    } else {
+        None
+    };
+
     for (col, &ovr) in overrides.iter().enumerate() {
+        if let Some(mask) = &covered {
+            if !mask[col] {
+                continue;
+            }
+        }
         let b = if ovr == NONE { consensus[col] } else { ovr };
         if b == GAP {
             tally.counts[col][I_GAP] = tally.counts[col][I_GAP].saturating_add(1);
@@ -607,5 +643,22 @@ mod tests {
         assert!(r.rounds.len() == 1, "expected 1 round, got {}", r.rounds.len());
         assert_eq!(r.rounds[0].n_columns_changed, 0);
         assert_eq!(r.rounds[0].stream_counts.get(&Stream::Standard), Some(&2));
+    }
+
+    #[test]
+    fn outlier_partial_tally_covers_aligned_columns_only() {
+        // Scramble the slot4..slot5 inter-anchor segment (cols 91..117) so that
+        // piece fails the band → OUTLIER, but the rest of the lattice aligns.
+        // Partial-tally must count the aligned columns and skip the failed span.
+        let mut m = CONS_171.to_vec();
+        for (i, b) in m.iter_mut().enumerate().take(117).skip(91) {
+            *b = b"ACGT"[i % 4];
+        }
+        let o = process_monomer("out".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
+        assert_eq!(o.stream, Stream::Outlier, "{:?}", o.cause);
+        let mut tally = ColumnTally::new(CONS_171.len());
+        update_tally(&mut tally, &o, CONS_171);
+        assert!(tally.total_at(14) >= 1, "aligned anchor column 14 must be tallied");
+        assert_eq!(tally.total_at(100), 0, "failed-piece column 100 must be skipped");
     }
 }
