@@ -15,3 +15,4 @@ pub mod io;
 pub mod cmd;
 pub mod align;
 pub mod anchor_detect;
+pub mod anchor_scaffold;
