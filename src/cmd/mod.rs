@@ -11,4 +11,5 @@ pub mod motif_cut;
 pub mod motif_graph;
 pub mod reads_alphabet;
 pub mod reads_extract;
+pub mod scaffold_msa;
 pub mod scan_reads;

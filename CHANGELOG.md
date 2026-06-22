@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **scaffold-msa** subcommand: anchor-scaffolded MSA over canonical-rotation
+  monomers. See `docs/anchor_scaffold_msa_brief.md`. Pipeline: detect
+  anchors → chain → extract pieces (inter-anchor + missing-anchor gap) →
+  banded Levenshtein per piece → star-consensus column tally → rebuild →
+  EM (≤ 3 rounds, < 0.1% column-change convergence). Three output streams
+  (`standard.jsonl`, `outliers.jsonl`, `exceptions.jsonl`) plus
+  `consensus.fa`, `columns.tsv`, `summary.tsv`. Closed-enum cause
+  (OK | TOO_FEW_ANCHORS | SEGMENT_OVER_BAND | GAP_UNALIGNABLE |
+  NONCANONICAL_ANCHOR_ORDER). Byte-identical across runs (tie-break fixed:
+  HD → |Δpos| → leftmost; consensus tie-break lex A<C<G<T).
+- **Smoke fixture**: `tests/data/fixtures/{smoke.fasta, smoke_consensus.fa,
+  smoke_invariants.json}` — 24 synthetic monomers exercising each branch
+  (clean/sub/del/ins/anchor-knockout/outlier/exception). Generator at
+  `tests/data/make_smoke_fixture.py`, `make smoke-fixture` regenerates.
+- **Library modules**: `align::ond` (banded Levenshtein + edit script),
+  `anchor_detect` (per-monomer SCAFFOLD_PANEL scan), `anchor_scaffold`
+  (chain + piece extraction + tally + rebuild + EM driver).
+
 ## v0.2.0 — 2026-05-27
 
 ### Features

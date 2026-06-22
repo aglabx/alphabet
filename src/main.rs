@@ -67,6 +67,13 @@ enum Cmd {
         args: Vec<String>,
     },
 
+    /// Anchor-scaffolded MSA over canonical-rotation monomers
+    #[command(name = "scaffold-msa")]
+    ScaffoldMsa {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
+
     /// ONT reads pipeline (HPC-HMM classification)
     #[command(subcommand)]
     Reads(ReadsCmd),
@@ -139,6 +146,9 @@ fn main() {
         Cmd::Spacing { args } => cmd::cenpb_spacing::run_from_args(prepend_prog("spacing", args)),
         Cmd::FindPeriodicBoxes { args } => {
             cmd::find_periodic_boxes::run_from_args(prepend_prog("find-periodic-boxes", args))
+        }
+        Cmd::ScaffoldMsa { args } => {
+            cmd::scaffold_msa::run_from_args(prepend_prog("scaffold-msa", args))
         }
 
         Cmd::Reads(r) => match r {
