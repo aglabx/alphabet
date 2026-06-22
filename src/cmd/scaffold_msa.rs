@@ -58,6 +58,13 @@ struct Args {
     /// to stop early). Brief default: < 0.1%.
     #[arg(long = "converge", default_value_t = 0.001)]
     converge: f64,
+
+    /// Relative-chaining anchor detection: select the longest gap-consistent
+    /// co-linear anchor chain instead of fixed absolute-position windows.
+    /// Floats with indel drift; invariant to frame offset. Required for real
+    /// data (see BTN-scaffold-panel-fixed-windows-dont-transfer).
+    #[arg(long = "chain", default_value_t = false)]
+    chained: bool,
 }
 
 pub fn run_from_args(argv: Vec<String>) {
@@ -89,6 +96,7 @@ fn run(args: Args) -> Result<()> {
         convergence_threshold: args.converge,
         min_anchors: args.min_anchors,
         max_hd: args.max_hd,
+        chained: args.chained,
     };
 
     let t_em = std::time::Instant::now();

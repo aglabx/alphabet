@@ -169,6 +169,110 @@ pub fn count_primary(hits: &[AnchorHit]) -> usize {
     hits.iter().filter(|h| h.role == Role::Primary).count()
 }
 
+/// Allowed deviation between an observed gap and the canonical gap between two
+/// chained anchors. Base tolerance + 20% of the canonical distance, so longer
+/// (or skipped-slot) gaps tolerate more accumulated indel drift. Frame-offset
+/// invariant: only *differences* of positions enter, never absolute positions.
+fn gap_tol(canon_gap: i64) -> i64 {
+    3 + (canon_gap.abs() * 2) / 10
+}
+
+/// Relative-chaining anchor detection (BTN-scaffold-panel-fixed-windows-dont-transfer).
+///
+/// Unlike [`detect_anchors`] (fixed absolute ±tolerance windows from monomer
+/// start — which collapses on real indel-bearing monomers), this collects every
+/// candidate k-mer match per slot across the WHOLE monomer, then selects the
+/// longest co-linear chain whose inter-anchor gaps match the canonical spacings
+/// within [`gap_tol`]. Because only position *differences* are constrained, the
+/// result floats with indel drift and is invariant to the monomer's rotation
+/// frame offset. Ties broken by lower total Hamming distance.
+///
+/// O(c²) per monomer in the candidate count `c`; `c` is bounded by `max_hd`.
+pub fn detect_anchors_chained(panel: &[PanelEntry], monomer: &[u8], max_hd: usize) -> Vec<AnchorHit> {
+    // 1. all candidate matches per slot, genome-wide.
+    struct Cand {
+        panel_idx: usize,
+        pos: usize,
+        hd: usize,
+    }
+    let mut cands: Vec<Cand> = Vec::new();
+    for (idx, entry) in panel.iter().enumerate() {
+        let k = entry.kmer.len();
+        if k == 0 || monomer.len() < k {
+            continue;
+        }
+        let hd_cap = entry.hd_threshold.min(max_hd);
+        let last = monomer.len() - k;
+        for pos in 0..=last {
+            let hd = hamming(&monomer[pos..pos + k], entry.kmer);
+            if hd <= hd_cap {
+                cands.push(Cand { panel_idx: idx, pos, hd });
+            }
+        }
+    }
+    if cands.is_empty() {
+        return Vec::new();
+    }
+    // 2. order by position, then panel index.
+    cands.sort_by(|a, b| a.pos.cmp(&b.pos).then(a.panel_idx.cmp(&b.panel_idx)));
+    let n = cands.len();
+
+    // 3. DP for the longest gap-consistent co-linear chain (tie: min total hd).
+    let mut dp = vec![1usize; n];
+    let mut hdsum: Vec<i64> = cands.iter().map(|c| c.hd as i64).collect();
+    let mut prev = vec![usize::MAX; n];
+    let canon = |idx: usize| panel[idx].canonical_pos as i64;
+    let mut best_i = 0usize;
+    for i in 0..n {
+        for j in 0..i {
+            if cands[j].panel_idx >= cands[i].panel_idx || cands[j].pos >= cands[i].pos {
+                continue;
+            }
+            let canon_gap = canon(cands[i].panel_idx) - canon(cands[j].panel_idx);
+            let obs_gap = cands[i].pos as i64 - cands[j].pos as i64;
+            if (obs_gap - canon_gap).abs() > gap_tol(canon_gap) {
+                continue;
+            }
+            let cand_len = dp[j] + 1;
+            let cand_hd = hdsum[j] + cands[i].hd as i64;
+            if cand_len > dp[i] || (cand_len == dp[i] && cand_hd < hdsum[i]) {
+                dp[i] = cand_len;
+                hdsum[i] = cand_hd;
+                prev[i] = j;
+            }
+        }
+        if dp[i] > dp[best_i] || (dp[i] == dp[best_i] && hdsum[i] < hdsum[best_i]) {
+            best_i = i;
+        }
+    }
+
+    // 4. backtrack the winning chain.
+    let mut chain_idx = Vec::new();
+    let mut cur = best_i;
+    while cur != usize::MAX {
+        chain_idx.push(cur);
+        cur = prev[cur];
+    }
+    chain_idx.reverse();
+
+    // 5. materialize hits (already in increasing pos by construction).
+    chain_idx
+        .iter()
+        .map(|&ci| {
+            let c = &cands[ci];
+            let e = &panel[c.panel_idx];
+            AnchorHit {
+                panel_idx: c.panel_idx,
+                label: e.label,
+                canonical_pos: e.canonical_pos,
+                found_pos: c.pos,
+                hd: c.hd,
+                role: e.role,
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,5 +422,39 @@ mod tests {
         assert!(s.contains(r#""canonical_pos":14"#), "{s}");
         assert!(s.contains(r#""hd":0"#), "{s}");
         assert!(s.contains(r#""role":"primary""#), "{s}");
+    }
+
+    #[test]
+    fn chained_clean_consensus_recovers_all_primaries() {
+        let hits = detect_anchors_chained(SCAFFOLD_PANEL, CONS_171, 0);
+        assert_eq!(count_primary(&hits), 10, "{hits:?}");
+        // bi-positional CATTC still split across slot0 and slot8 by spacing.
+        let cattc: Vec<_> = hits
+            .iter()
+            .filter(|h| SCAFFOLD_PANEL[h.panel_idx].kmer == b"CATTC")
+            .collect();
+        assert_eq!(cattc.len(), 2);
+    }
+
+    #[test]
+    fn chained_beats_windowed_under_indel_drift() {
+        // Insert 5 bases after slot0 so slot1..slot9 shift +5 — past the ±3
+        // absolute windows the windowed detector uses, but the inter-anchor
+        // GAPS (what chaining keys on) are preserved.
+        let mut m = CONS_171[..16].to_vec();
+        m.extend_from_slice(b"AAAAA");
+        m.extend_from_slice(&CONS_171[16..]);
+        let windowed = count_primary(&detect_anchors(SCAFFOLD_PANEL, &m, 1));
+        let chained = count_primary(&detect_anchors_chained(SCAFFOLD_PANEL, &m, 1));
+        assert!(
+            chained > windowed,
+            "chained {chained} should beat windowed {windowed} under drift"
+        );
+        assert!(chained >= 9, "chained should recover most anchors, got {chained}");
+    }
+
+    #[test]
+    fn chained_empty_on_no_candidates() {
+        assert!(detect_anchors_chained(SCAFFOLD_PANEL, b"NNNNNNNNNN", 0).is_empty());
     }
 }

@@ -29,7 +29,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 
 use crate::align::{ond_align, EditScript, Op};
-use crate::anchor_detect::{detect_anchors, AnchorHit, PanelEntry};
+use crate::anchor_detect::{detect_anchors, detect_anchors_chained, AnchorHit, PanelEntry};
 use crate::anchor_scaffold::{extract_pieces, Chain, PieceKind};
 
 /// Output stream a monomer is routed to.
@@ -99,8 +99,13 @@ pub fn process_monomer(
     panel: &[PanelEntry],
     min_anchors: usize,
     max_hd: usize,
+    chained: bool,
 ) -> MonomerOutcome {
-    let hits = detect_anchors(panel, monomer, max_hd);
+    let hits = if chained {
+        detect_anchors_chained(panel, monomer, max_hd)
+    } else {
+        detect_anchors(panel, monomer, max_hd)
+    };
     let chain = Chain::from_hits(hits);
 
     if !chain.has_enough_anchors(min_anchors) {
@@ -319,11 +324,15 @@ pub struct EmParams {
     pub min_anchors: usize,
     /// Global cap on per-slot HD threshold (brief: 0 for smoke).
     pub max_hd: usize,
+    /// Use relative-chaining anchor detection (floats with indel drift) instead
+    /// of fixed absolute-position windows. See `detect_anchors_chained` +
+    /// BTN-scaffold-panel-fixed-windows-dont-transfer.
+    pub chained: bool,
 }
 
 impl Default for EmParams {
     fn default() -> Self {
-        Self { max_rounds: 3, convergence_threshold: 0.001, min_anchors: 6, max_hd: 0 }
+        Self { max_rounds: 3, convergence_threshold: 0.001, min_anchors: 6, max_hd: 0, chained: false }
     }
 }
 
@@ -369,6 +378,7 @@ pub fn run_em(
                     panel,
                     params.min_anchors,
                     params.max_hd,
+                    params.chained,
                 )
             })
             .collect();
@@ -431,6 +441,7 @@ mod tests {
             SCAFFOLD_PANEL,
             6,
             0,
+            false,
         );
         assert_eq!(o.stream, Stream::Standard);
         assert_eq!(o.cause, Cause::Ok);
@@ -444,7 +455,7 @@ mod tests {
         // Mirror M07_sub12 from the fixture: sub at col 12 (A -> T).
         let mut m = CONS_171.to_vec();
         m[12] = b'T';
-        let o = process_monomer("sub12".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0);
+        let o = process_monomer("sub12".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
         assert_eq!(o.stream, Stream::Standard);
         assert_eq!(o.edit_script, vec![Op::Sub { col: 12, to: 'T' }]);
     }
@@ -453,7 +464,7 @@ mod tests {
     fn deletion_monomer_yields_single_del() {
         let mut m = CONS_171.to_vec();
         m.remove(12);
-        let o = process_monomer("del12".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0);
+        let o = process_monomer("del12".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
         assert_eq!(o.stream, Stream::Standard);
         // ond_align reports a Del at a canonical column near 12; the precise
         // column can land at 11 or 12 depending on traceback tie-break
@@ -477,7 +488,7 @@ mod tests {
         for (i, p) in (91..117).enumerate() {
             m[p] = b"ACGT"[i % 3]; // intentionally skewed -> guaranteed D > band
         }
-        let o = process_monomer("outlier".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0);
+        let o = process_monomer("outlier".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
         assert_eq!(o.stream, Stream::Outlier);
         assert_eq!(o.cause, Cause::SegmentOverBand);
         assert_eq!(o.pieces.len(), 1, "{:?}", o.pieces);
@@ -495,7 +506,7 @@ mod tests {
                 m[pos + j] = b"ATGC"[(pos + j) % 4];
             }
         }
-        let o = process_monomer("exc".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0);
+        let o = process_monomer("exc".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
         assert_eq!(o.stream, Stream::Exception);
         assert_eq!(o.cause, Cause::TooFewAnchors);
         assert!(o.edit_script.is_empty());
@@ -511,7 +522,7 @@ mod tests {
         for j in 0..5 {
             m[86 + j] = b"ATGC"[(86 + j) % 4];
         }
-        let o = process_monomer("ko86".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0);
+        let o = process_monomer("ko86".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
         assert_eq!(o.stream, Stream::Standard);
         assert_eq!(o.cause, Cause::Ok);
         assert_eq!(o.n_present, 9);
@@ -527,7 +538,7 @@ mod tests {
 
     #[test]
     fn tally_increments_consensus_bases_for_clean() {
-        let o = process_monomer("c".into(), CONS_171, CONS_171, SCAFFOLD_PANEL, 6, 0);
+        let o = process_monomer("c".into(), CONS_171, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
         let mut t = ColumnTally::new(CONS_171.len());
         update_tally(&mut t, &o, CONS_171);
         // Every column receives exactly one base vote — the consensus byte.
