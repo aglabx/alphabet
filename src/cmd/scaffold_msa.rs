@@ -19,7 +19,7 @@ use clap::Parser;
 
 use crate::anchor_detect::SCAFFOLD_PANEL;
 use crate::anchor_scaffold::{
-    run_em, update_tally, Cause, ColumnTally, EmParams, MonomerOutcome, Stream,
+    aligned_row, run_em, update_tally, Cause, ColumnTally, EmParams, MonomerOutcome, Stream,
 };
 use crate::io::read_fasta;
 
@@ -65,6 +65,26 @@ struct Args {
     /// data (see BTN-scaffold-panel-fixed-windows-dont-transfer).
     #[arg(long = "chain", default_value_t = false)]
     chained: bool,
+
+    /// Also write a human-viewable MSA FASTA: one row per aligned monomer over
+    /// the canonical columns (consensus base / Sub / `-` Del / `.` uncovered),
+    /// header `>{field_id}#{mono} chrom={chr}`. Exceptions are omitted.
+    #[arg(long = "emit-msa", value_name = "PATH")]
+    emit_msa: Option<PathBuf>,
+}
+
+/// Extract `chrN` (or `chrN_...`) from a monomer id like
+/// `chm13|chr12:34..|orig=R|..#14`.
+fn chrom_of(id: &str) -> &str {
+    if let Some(i) = id.find("chr") {
+        let rest = &id[i..];
+        let end = rest
+            .find([':', '|', '#'].as_slice())
+            .unwrap_or(rest.len());
+        &rest[..end]
+    } else {
+        "?"
+    }
 }
 
 pub fn run_from_args(argv: Vec<String>) {
@@ -107,6 +127,9 @@ fn run(args: Args) -> Result<()> {
     emit_consensus(&args.outdir, &seed_name, &result.final_consensus)?;
     emit_columns(&args.outdir, &result.final_outcomes, &result.final_consensus)?;
     emit_summary(&args.outdir, n_std, n_out, n_exc, &cause_counts)?;
+    if let Some(msa_path) = &args.emit_msa {
+        emit_msa_file(msa_path, &result.final_outcomes, &result.final_consensus)?;
+    }
 
     let n_mono = monomers.len();
     let rate = if dt_em.as_secs_f64() > 0.0 {
@@ -178,6 +201,34 @@ fn emit_jsonl(
     w_out.flush()?;
     w_exc.flush()?;
     Ok((n_std, n_out, n_exc, cause_counts))
+}
+
+fn emit_msa_file(
+    path: &std::path::Path,
+    outcomes: &[MonomerOutcome],
+    consensus: &[u8],
+) -> Result<()> {
+    let mut w = BufWriter::new(
+        File::create(path).with_context(|| format!("create {}", path.display()))?,
+    );
+    let mut n = 0usize;
+    for o in outcomes {
+        if o.stream == Stream::Exception {
+            continue;
+        }
+        let st = match o.stream {
+            Stream::Standard => "standard",
+            Stream::Outlier => "outlier",
+            Stream::Exception => "exception",
+        };
+        writeln!(w, ">{} chrom={} stream={} n_anchors={}", o.id, chrom_of(&o.id), st, o.n_present)?;
+        w.write_all(&aligned_row(o, consensus))?;
+        writeln!(w)?;
+        n += 1;
+    }
+    w.flush()?;
+    eprintln!("MSA: wrote {n} aligned rows -> {}", path.display());
+    Ok(())
 }
 
 fn emit_consensus(outdir: &std::path::Path, seed_name: &str, consensus: &[u8]) -> Result<()> {

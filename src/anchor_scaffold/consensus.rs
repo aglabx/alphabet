@@ -227,14 +227,71 @@ fn base_idx(b: u8) -> Option<usize> {
     }
 }
 
-/// Accumulate a STANDARD outcome's contribution into `tally`. Outliers and
-/// exceptions are silently skipped (they don't shape the consensus).
-///
-/// For each canonical column in `consensus`:
-///   * default contribution = `consensus[col]`
-///   * `Sub{col, to}` overrides to `to`
-///   * `Del{col}` overrides to gap
-///   * `Ins{col, base}` is ignored at the column level (lives between cols)
+/// Canonical columns this monomer aligned and may vote on / be displayed at.
+/// STANDARD = all columns; OUTLIER = the anchored extent
+/// `[first_anchor ..= last_anchor]` minus the spans of pieces that failed the
+/// band (and the flanks); EXCEPTION = none.
+pub fn covered_mask(outcome: &MonomerOutcome, n: usize) -> Vec<bool> {
+    match outcome.stream {
+        Stream::Standard => vec![true; n],
+        Stream::Exception => vec![false; n],
+        Stream::Outlier => {
+            let mut mask = vec![false; n];
+            if let (Some(first), Some(last)) = (
+                outcome.anchors.iter().map(|a| a.canonical_pos).min(),
+                outcome.anchors.iter().map(|a| a.canonical_pos).max(),
+            ) {
+                let hi = last.min(n.saturating_sub(1));
+                for c in mask.iter_mut().take(hi + 1).skip(first) {
+                    *c = true;
+                }
+                for p in &outcome.pieces {
+                    let (s, e) = p.canonical_span;
+                    for c in mask.iter_mut().take(e.min(n)).skip(s) {
+                        *c = false;
+                    }
+                }
+            }
+            mask
+        }
+    }
+}
+
+/// Reconstruct one monomer's aligned row over the canonical columns for a
+/// human-viewable MSA: consensus base by default, `Sub` override, `-` for `Del`,
+/// `.` for columns not covered by an aligned piece (failed pieces / flanks).
+/// Insertions are between-column events and are omitted from the fixed grid.
+pub fn aligned_row(outcome: &MonomerOutcome, consensus: &[u8]) -> Vec<u8> {
+    let n = consensus.len();
+    let mut row = consensus.to_vec();
+    for op in &outcome.edit_script {
+        match *op {
+            Op::Sub { col, to } => {
+                if col < n {
+                    row[col] = to as u8;
+                }
+            }
+            Op::Del { col } => {
+                if col < n {
+                    row[col] = b'-';
+                }
+            }
+            Op::Ins { .. } => {}
+        }
+    }
+    let covered = covered_mask(outcome, n);
+    for (col, cell) in row.iter_mut().enumerate() {
+        if !covered[col] {
+            *cell = b'.';
+        }
+    }
+    row
+}
+
+/// Accumulate a monomer's per-column contribution into `tally`, over the columns
+/// it actually aligned (see `covered_mask`). Per column: default = `consensus[col]`,
+/// `Sub{col,to}` overrides to `to`, `Del{col}` overrides to gap, `Ins` is ignored
+/// (between-column). Exceptions contribute nothing.
 pub fn update_tally(tally: &mut ColumnTally, outcome: &MonomerOutcome, consensus: &[u8]) {
     // Exceptions (no usable anchor chain) contribute nothing.
     if outcome.stream == Stream::Exception {
@@ -268,42 +325,16 @@ pub fn update_tally(tally: &mut ColumnTally, outcome: &MonomerOutcome, consensus
         }
     }
 
-    // Which canonical columns this monomer actually aligned and may vote on.
-    //   * STANDARD: every column (all pieces aligned) — unchanged behaviour.
-    //   * OUTLIER: partial-tally — the anchored extent
-    //     [first_anchor .. last_anchor] MINUS the canonical spans of pieces that
-    //     failed the band. Those failed columns have no alignment, so voting the
-    //     consensus base there would fabricate data. Flanks outside the lattice
-    //     extent are likewise uncovered. This realises "align between the present
-    //     anchors" — a divergent gap costs only its own columns, not the whole
-    //     monomer (BTN-scaffold-band-too-tight-starves-column-profile).
-    let covered: Option<Vec<bool>> = if outcome.stream == Stream::Outlier {
-        let mut mask = vec![false; consensus.len()];
-        if let (Some(first), Some(last)) = (
-            outcome.anchors.iter().map(|a| a.canonical_pos).min(),
-            outcome.anchors.iter().map(|a| a.canonical_pos).max(),
-        ) {
-            let hi = last.min(consensus.len().saturating_sub(1));
-            for c in mask.iter_mut().take(hi + 1).skip(first) {
-                *c = true;
-            }
-            for p in &outcome.pieces {
-                let (s, e) = p.canonical_span;
-                for c in mask.iter_mut().take(e.min(consensus.len())).skip(s) {
-                    *c = false;
-                }
-            }
-        }
-        Some(mask)
-    } else {
-        None
-    };
+    // Partial-tally: a monomer votes only on the columns it actually aligned
+    // (STANDARD = all; OUTLIER = anchored extent minus failed-piece spans).
+    // Voting the consensus base on an unaligned column would fabricate data.
+    // Realises "align between the present lattice anchors" — a divergent gap
+    // costs only its own columns (BTN-scaffold-band-too-tight-starves-column-profile).
+    let covered = covered_mask(outcome, consensus.len());
 
     for (col, &ovr) in overrides.iter().enumerate() {
-        if let Some(mask) = &covered {
-            if !mask[col] {
-                continue;
-            }
+        if !covered[col] {
+            continue;
         }
         let b = if ovr == NONE { consensus[col] } else { ovr };
         if b == GAP {
@@ -660,5 +691,25 @@ mod tests {
         update_tally(&mut tally, &o, CONS_171);
         assert!(tally.total_at(14) >= 1, "aligned anchor column 14 must be tallied");
         assert_eq!(tally.total_at(100), 0, "failed-piece column 100 must be skipped");
+    }
+
+    #[test]
+    fn aligned_row_clean_equals_consensus_and_outlier_dots_failed_span() {
+        // clean monomer -> row identical to consensus
+        let o = process_monomer("c".into(), CONS_171, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
+        assert_eq!(aligned_row(&o, CONS_171), CONS_171.to_vec());
+
+        // outlier with scrambled slot4..slot5 segment -> '.' inside failed span,
+        // real base at an aligned anchor column.
+        let mut m = CONS_171.to_vec();
+        for (i, b) in m.iter_mut().enumerate().take(117).skip(91) {
+            *b = b"ACGT"[i % 4];
+        }
+        let o = process_monomer("o".into(), &m, CONS_171, SCAFFOLD_PANEL, 6, 0, false);
+        assert_eq!(o.stream, Stream::Outlier);
+        let row = aligned_row(&o, CONS_171);
+        assert_eq!(row.len(), CONS_171.len());
+        assert_eq!(row[100], b'.', "failed-piece column must be '.'");
+        assert_ne!(row[14], b'.', "aligned column must carry a base");
     }
 }
