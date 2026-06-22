@@ -26,6 +26,7 @@
 
 use std::collections::HashMap;
 
+use rayon::prelude::*;
 use serde::Serialize;
 
 use crate::align::{ond_align, EditScript, Op};
@@ -435,8 +436,11 @@ pub fn run_em(
     let mut last_outcomes: Vec<MonomerOutcome> = Vec::new();
 
     for round_idx in 0..params.max_rounds {
+        // Parallel over monomers: process_monomer is pure (reads current
+        // consensus + panel, no shared mutable state); par_iter().collect()
+        // preserves order, so the result is byte-identical to the serial map.
         let outcomes: Vec<MonomerOutcome> = monomers
-            .iter()
+            .par_iter()
             .map(|(id, seq)| {
                 process_monomer(
                     id.clone(),

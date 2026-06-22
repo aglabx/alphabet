@@ -66,6 +66,10 @@ struct Args {
     #[arg(long = "chain", default_value_t = false)]
     chained: bool,
 
+    /// Rayon worker threads for the per-monomer EM loop (0 = all cores).
+    #[arg(short = 't', long = "threads", default_value_t = 0)]
+    threads: usize,
+
     /// Also write a human-viewable MSA FASTA: one row per aligned monomer over
     /// the canonical columns (consensus base / Sub / `-` Del / `.` uncovered),
     /// header `>{field_id}#{mono} chrom={chr}`. Exceptions are omitted.
@@ -96,6 +100,12 @@ pub fn run_from_args(argv: Vec<String>) {
 }
 
 fn run(args: Args) -> Result<()> {
+    if args.threads > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(args.threads)
+            .build_global()
+            .ok();
+    }
     let monomers = read_fasta(args.monomers.to_str().unwrap())
         .with_context(|| format!("reading monomers FASTA {}", args.monomers.display()))?;
     eprintln!("Loaded {} monomers from {}", monomers.len(), args.monomers.display());
