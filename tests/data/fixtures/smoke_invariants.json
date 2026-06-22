@@ -2,6 +2,7 @@
   "n_input": 24,
   "consensus_len": 171,
   "min_anchors": 6,
+  "n_primary_slots": 10,
   "stream_counts": {
     "standard": 18,
     "outlier": 3,
@@ -11,145 +12,145 @@
     {
       "id": "M01_clean",
       "expected_stream": "standard",
-      "note": "exact; D=0",
+      "note": "exact consensus; 0 edits",
       "len": 171
     },
     {
       "id": "M02_clean",
       "expected_stream": "standard",
-      "note": "exact; D=0",
+      "note": "exact consensus; 0 edits",
       "len": 171
     },
     {
       "id": "M03_clean",
       "expected_stream": "standard",
-      "note": "exact; D=0",
+      "note": "exact consensus; 0 edits",
       "len": 171
     },
     {
       "id": "M04_clean",
       "expected_stream": "standard",
-      "note": "exact; D=0",
+      "note": "exact consensus; 0 edits",
       "len": 171
     },
     {
       "id": "M05_clean",
       "expected_stream": "standard",
-      "note": "exact; D=0",
+      "note": "exact consensus; 0 edits",
       "len": 171
     },
     {
       "id": "M06_clean",
       "expected_stream": "standard",
-      "note": "exact; D=0",
+      "note": "exact consensus; 0 edits",
       "len": 171
     },
     {
       "id": "M07_sub12",
       "expected_stream": "standard",
-      "note": "sub col 12 A->T",
+      "note": "substitution col 12: A->T (D=1)",
       "len": 171
     },
     {
       "id": "M08_sub33",
       "expected_stream": "standard",
-      "note": "sub col 33 T->G",
+      "note": "substitution col 33: T->G (D=1)",
       "len": 171
     },
     {
       "id": "M09_sub70",
       "expected_stream": "standard",
-      "note": "sub col 70 G->A",
+      "note": "substitution col 70: G->A (D=1)",
       "len": 171
     },
     {
       "id": "M10_sub130",
       "expected_stream": "standard",
-      "note": "sub col 130 G->A",
+      "note": "substitution col 130: G->A (D=1)",
       "len": 171
     },
     {
       "id": "M11_del12",
       "expected_stream": "standard",
-      "note": "del col 12",
+      "note": "1bp deletion at col 12 (len 170); gap unambiguous",
       "len": 170
     },
     {
       "id": "M12_del70",
       "expected_stream": "standard",
-      "note": "del col 70",
+      "note": "1bp deletion at col 70 (len 170); gap unambiguous",
       "len": 170
     },
     {
       "id": "M13_del130",
       "expected_stream": "standard",
-      "note": "del col 130",
+      "note": "1bp deletion at col 130 (len 170); gap unambiguous",
       "len": 170
     },
     {
       "id": "M14_ins33",
       "expected_stream": "standard",
-      "note": "ins before 33",
+      "note": "1bp insertion before col 33 (len 172)",
       "len": 172
     },
     {
       "id": "M15_ins130",
       "expected_stream": "standard",
-      "note": "ins before 130",
+      "note": "1bp insertion before col 130 (len 172)",
       "len": 172
     },
     {
       "id": "M16_knockout86",
       "expected_stream": "standard",
-      "note": "anchor 86 lost; across-gap",
+      "note": "anchor at 86 destroyed (->filler); 9/10 primary present; gap aligned across missing anchor (D<=band)",
       "len": 171
     },
     {
       "id": "M17_knockout117",
       "expected_stream": "standard",
-      "note": "anchor 117 lost; across-gap",
+      "note": "anchor at 117 destroyed (->filler); 9/10 primary present; gap aligned across missing anchor (D<=band)",
       "len": 171
     },
     {
       "id": "M18_knockout141",
       "expected_stream": "standard",
-      "note": "anchor 141 lost; across-gap",
+      "note": "anchor at 141 destroyed (->filler); 9/10 primary present; gap aligned across missing anchor (D<=band)",
       "len": 171
     },
     {
       "id": "M19_outlier",
       "expected_stream": "outlier",
-      "note": "seg 91-116 random; D>band",
+      "note": "segment 91-116 randomized; D>band on that segment; all 10 primary anchors present -> outliers stream",
       "len": 171
     },
     {
       "id": "M20_outlier",
       "expected_stream": "outlier",
-      "note": "seg 91-116 random; D>band",
+      "note": "segment 91-116 randomized; D>band on that segment; all 10 primary anchors present -> outliers stream",
       "len": 171
     },
     {
       "id": "M21_outlier",
       "expected_stream": "outlier",
-      "note": "seg 91-116 random; D>band",
+      "note": "segment 91-116 randomized; D>band on that segment; all 10 primary anchors present -> outliers stream",
       "len": 171
     },
     {
       "id": "M22_exception",
       "expected_stream": "exception",
-      "note": "4 present < 6",
+      "note": "6 primary anchors reverted to filler; 4 present < 6 -> exceptions stream",
       "len": 171
     },
     {
       "id": "M23_exception",
       "expected_stream": "exception",
-      "note": "4 present < 6",
+      "note": "6 primary anchors reverted to filler; 4 present < 6 -> exceptions stream",
       "len": 171
     },
     {
       "id": "M24_exception",
       "expected_stream": "exception",
-      "note": "4 present < 6",
+      "note": "6 primary anchors reverted to filler; 4 present < 6 -> exceptions stream",
       "len": 171
     }
   ]
