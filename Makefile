@@ -1,4 +1,4 @@
-.PHONY: all build release debug check test clean fmt install help
+.PHONY: all build release debug check test clean fmt install help smoke-fixture
 
 BIN     := target/release/alphabet
 INPUT   ?= input.10kb.fasta
@@ -35,6 +35,12 @@ install: release
 run: release
 	$(BIN) run $(INPUT) -o $(OUTDIR) -t $(THREADS)
 
+# Regenerate the deterministic smoke fixture for anchor_scaffold_msa tests.
+# Outputs tests/data/fixtures/{smoke.fasta, smoke_consensus.fa, smoke_invariants.json}.
+# Re-run is byte-identical (fixed seed); committed files travel with the repo.
+smoke-fixture:
+	python3 tests/data/make_smoke_fixture.py
+
 help:
 	@echo "Alphabet — make targets"
 	@echo "  make                       build release binary (default)"
@@ -45,6 +51,7 @@ help:
 	@echo "  make clean                 cargo clean"
 	@echo "  make install               cargo install --path ."
 	@echo "  make run INPUT=... OUTDIR=... THREADS=..."
+	@echo "  make smoke-fixture         regenerate anchor_scaffold_msa smoke fixture"
 	@echo ""
 	@echo "Binary: $(BIN)"
 	@echo "CLI:    $(BIN) --help"

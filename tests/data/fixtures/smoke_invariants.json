@@ -1,0 +1,156 @@
+{
+  "n_input": 24,
+  "consensus_len": 171,
+  "min_anchors": 6,
+  "stream_counts": {
+    "standard": 18,
+    "outlier": 3,
+    "exception": 3
+  },
+  "monomers": [
+    {
+      "id": "M01_clean",
+      "expected_stream": "standard",
+      "note": "exact; D=0",
+      "len": 171
+    },
+    {
+      "id": "M02_clean",
+      "expected_stream": "standard",
+      "note": "exact; D=0",
+      "len": 171
+    },
+    {
+      "id": "M03_clean",
+      "expected_stream": "standard",
+      "note": "exact; D=0",
+      "len": 171
+    },
+    {
+      "id": "M04_clean",
+      "expected_stream": "standard",
+      "note": "exact; D=0",
+      "len": 171
+    },
+    {
+      "id": "M05_clean",
+      "expected_stream": "standard",
+      "note": "exact; D=0",
+      "len": 171
+    },
+    {
+      "id": "M06_clean",
+      "expected_stream": "standard",
+      "note": "exact; D=0",
+      "len": 171
+    },
+    {
+      "id": "M07_sub12",
+      "expected_stream": "standard",
+      "note": "sub col 12 A->T",
+      "len": 171
+    },
+    {
+      "id": "M08_sub33",
+      "expected_stream": "standard",
+      "note": "sub col 33 T->G",
+      "len": 171
+    },
+    {
+      "id": "M09_sub70",
+      "expected_stream": "standard",
+      "note": "sub col 70 G->A",
+      "len": 171
+    },
+    {
+      "id": "M10_sub130",
+      "expected_stream": "standard",
+      "note": "sub col 130 G->A",
+      "len": 171
+    },
+    {
+      "id": "M11_del12",
+      "expected_stream": "standard",
+      "note": "del col 12",
+      "len": 170
+    },
+    {
+      "id": "M12_del70",
+      "expected_stream": "standard",
+      "note": "del col 70",
+      "len": 170
+    },
+    {
+      "id": "M13_del130",
+      "expected_stream": "standard",
+      "note": "del col 130",
+      "len": 170
+    },
+    {
+      "id": "M14_ins33",
+      "expected_stream": "standard",
+      "note": "ins before 33",
+      "len": 172
+    },
+    {
+      "id": "M15_ins130",
+      "expected_stream": "standard",
+      "note": "ins before 130",
+      "len": 172
+    },
+    {
+      "id": "M16_knockout86",
+      "expected_stream": "standard",
+      "note": "anchor 86 lost; across-gap",
+      "len": 171
+    },
+    {
+      "id": "M17_knockout117",
+      "expected_stream": "standard",
+      "note": "anchor 117 lost; across-gap",
+      "len": 171
+    },
+    {
+      "id": "M18_knockout141",
+      "expected_stream": "standard",
+      "note": "anchor 141 lost; across-gap",
+      "len": 171
+    },
+    {
+      "id": "M19_outlier",
+      "expected_stream": "outlier",
+      "note": "seg 91-116 random; D>band",
+      "len": 171
+    },
+    {
+      "id": "M20_outlier",
+      "expected_stream": "outlier",
+      "note": "seg 91-116 random; D>band",
+      "len": 171
+    },
+    {
+      "id": "M21_outlier",
+      "expected_stream": "outlier",
+      "note": "seg 91-116 random; D>band",
+      "len": 171
+    },
+    {
+      "id": "M22_exception",
+      "expected_stream": "exception",
+      "note": "4 present < 6",
+      "len": 171
+    },
+    {
+      "id": "M23_exception",
+      "expected_stream": "exception",
+      "note": "4 present < 6",
+      "len": 171
+    },
+    {
+      "id": "M24_exception",
+      "expected_stream": "exception",
+      "note": "4 present < 6",
+      "len": 171
+    }
+  ]
+}
