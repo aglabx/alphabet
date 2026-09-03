@@ -1,4 +1,5 @@
 pub mod annotate_cenpb;
+pub mod assign_letters;
 pub mod build_hpc_hmms;
 pub mod cenpb_spacing;
 pub mod classify_reads;
