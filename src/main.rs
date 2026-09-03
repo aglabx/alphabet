@@ -45,6 +45,12 @@ enum Cmd {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Annotate FASTA/FASTQ records with the alphabet (letter string + coordinates)
+    #[command(name = "annotate-reads")]
+    AnnotateReads {
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     /// Assign monomers to a fixed letter roster (profile-LR + k-mer votes)
     Assign {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -145,6 +151,9 @@ fn main() {
         Cmd::Discover { args } => cmd::discover_chains::run_from_args(prepend_prog("discover", args)),
         Cmd::Cut { args } => cmd::motif_cut::run_from_args(prepend_prog("cut", args)),
         Cmd::CutV2 { args } => cmd::cut_v2::run_from_args(prepend_prog("cut-v2", args)),
+        Cmd::AnnotateReads { args } => {
+            cmd::annotate_reads::run_from_args(prepend_prog("annotate-reads", args))
+        }
         Cmd::Assign { args } => cmd::assign_letters::run_from_args(prepend_prog("assign", args)),
         Cmd::Annotate { args } => cmd::annotate_cenpb::run_from_args(prepend_prog("annotate", args)),
 
