@@ -90,6 +90,24 @@ struct Args {
     #[arg(short = 't', long, default_value_t = 0)]
     threads: usize,
 
+    /// Retry the reverse complement when the forward pass finds no cut, and
+    /// report which strand each array was cut on.
+    ///
+    /// The anchor table is canonical-strand, so an input written the other way
+    /// round yields `no_first_cut` however much satellite it contains. That is
+    /// correct for the documented input (assembly arrays in canonical
+    /// orientation) and wrong for anything else: on PacBio HiFi reads, which
+    /// arrive in random orientation, the forward-only pass refuses ~48% of
+    /// alpha-bearing reads and the refused set is ~100% minus-strand.
+    ///
+    /// With this flag `start`/`end` stay in the INPUT frame while `mono_idx`
+    /// follows the cut order along the strand that matched, so a `-` array has
+    /// decreasing `start` as `mono_idx` rises. `sequence` is the monomer as
+    /// cut, i.e. on the matching strand. Adds an `orient` column; without the
+    /// flag the output is unchanged.
+    #[arg(long = "auto-orient", default_value_t = false)]
+    auto_orient: bool,
+
     /// Output: monomer rows TSV.
     #[arg(long = "out-monomers", default_value = "monomers.tsv")]
     out_monomers: String,
@@ -362,9 +380,14 @@ struct MonomerRow {
     score_left: f64,
     score_right: f64,
     sequence: String,
+    /// '+' if cut on the input strand, '-' if on its reverse complement.
+    /// Only written when --auto-orient is set.
+    orient: char,
 }
 
-fn process_record(
+/// Cut `seq` on the strand it is given. `process_record` wraps this to add the
+/// reverse-complement retry.
+fn process_record_one_strand(
     name: &str,
     seq: &[u8],
     params: &Params,
@@ -420,6 +443,7 @@ fn process_record(
             score_left: score[s],
             score_right: score[e],
             sequence: String::from_utf8_lossy(mono_seq).to_string(),
+            orient: '+',
         });
     }
 
@@ -441,6 +465,71 @@ fn process_record(
         median_len,
         mean_len,
         exceptions,
+    }
+}
+
+/// Cut `seq`, optionally retrying its reverse complement.
+///
+/// The retry exists because the anchor table is canonical-strand: an array
+/// written the other way round produces `no_first_cut` no matter how much
+/// satellite it holds. Coordinates from a reverse hit are mapped back to the
+/// input frame so the caller never has to flip anything; `mono_idx` keeps the
+/// cut order along the matching strand, so a `-` array counts down in `start`.
+fn process_record(
+    name: &str,
+    seq: &[u8],
+    params: &Params,
+    exc_threshold: usize,
+    exc_context: usize,
+    auto_orient: bool,
+) -> Outcome {
+    let fwd = process_record_one_strand(name, seq, params, exc_threshold, exc_context);
+    if !auto_orient {
+        return fwd;
+    }
+    if let Outcome::Cut { .. } = fwd {
+        return fwd;
+    }
+    let l = seq.len();
+    let rc = crate::monomer::revcomp(seq);
+    match process_record_one_strand(name, &rc, params, exc_threshold, exc_context) {
+        // both strands refused: say so rather than reporting the forward reason,
+        // which would read as "this sequence has no monomer structure"
+        Outcome::Outlier { array_id, seq_len, exceptions, .. } => Outcome::Outlier {
+            array_id,
+            seq_len,
+            reason: "no_cut_either_strand",
+            exceptions,
+        },
+        Outcome::Cut {
+            array_id,
+            seq_len,
+            mut rows,
+            n_interp,
+            n_direct,
+            mean_score,
+            median_len,
+            mean_len,
+            exceptions,
+        } => {
+            for r in rows.iter_mut() {
+                let (s, e) = (r.start, r.end);
+                r.start = l - e;
+                r.end = l - s;
+                r.orient = '-';
+            }
+            Outcome::Cut {
+                array_id,
+                seq_len,
+                rows,
+                n_interp,
+                n_direct,
+                mean_score,
+                median_len,
+                mean_len,
+                exceptions,
+            }
+        }
     }
 }
 
@@ -519,7 +608,9 @@ pub fn run_from_args(argv: Vec<String>) {
     let exc_context = args.exception_context;
     let outcomes: Vec<Outcome> = records
         .par_iter()
-        .map(|(name, seq)| process_record(name, seq, &params, exc_threshold, exc_context))
+        .map(|(name, seq)| {
+            process_record(name, seq, &params, exc_threshold, exc_context, args.auto_orient)
+        })
         .collect();
 
     // Write outputs.
@@ -538,7 +629,8 @@ pub fn run_from_args(argv: Vec<String>) {
 
     writeln!(
         fout_m,
-        "array_id\tmono_idx\tstart\tend\tlength\tinterpolated\tscore_left\tscore_right\tsequence"
+        "array_id\tmono_idx\tstart\tend\tlength\tinterpolated\tscore_left\tscore_right\tsequence{}",
+        if args.auto_orient { "\torient" } else { "" }
     )
     .unwrap();
     writeln!(
@@ -559,7 +651,8 @@ pub fn run_from_args(argv: Vec<String>) {
     let mut total_mono = 0usize;
     let mut total_direct = 0usize;
     let mut total_exceptions = 0usize;
-    let mut breakdown = [0usize; 3]; // too_short, no_first_cut, only_one_cut
+    // too_short, no_first_cut, only_one_cut, no_cut_either_strand
+    let mut breakdown = [0usize; 4];
 
     for o in &outcomes {
         n_records += 1;
@@ -596,7 +689,7 @@ pub fn run_from_args(argv: Vec<String>) {
                 for r in rows {
                     writeln!(
                         fout_m,
-                        "{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{}",
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{}{}",
                         array_id,
                         r.mono_idx,
                         r.start,
@@ -605,7 +698,12 @@ pub fn run_from_args(argv: Vec<String>) {
                         if r.interpolated { 1 } else { 0 },
                         r.score_left,
                         r.score_right,
-                        r.sequence
+                        r.sequence,
+                        if args.auto_orient {
+                            format!("\t{}", r.orient)
+                        } else {
+                            String::new()
+                        }
                     )
                     .unwrap();
                 }
@@ -629,7 +727,10 @@ pub fn run_from_args(argv: Vec<String>) {
                     "too_short" => breakdown[0] += 1,
                     "no_first_cut" => breakdown[1] += 1,
                     "only_one_cut" => breakdown[2] += 1,
-                    _ => {}
+                    "no_cut_either_strand" => breakdown[3] += 1,
+                    // an unclassified reason would vanish from the summary and
+                    // the totals would stop adding up -- refuse instead
+                    other => panic!("unhandled outlier reason {:?}", other),
                 }
                 writeln!(fout_o, "{}\t{}\t{}", array_id, seq_len, reason).unwrap();
             }
@@ -639,8 +740,8 @@ pub fn run_from_args(argv: Vec<String>) {
     eprintln!("records processed:     {}", n_records);
     eprintln!("records with monomers: {}", n_with);
     eprintln!(
-        "outliers:              {}  (too_short={}, no_first_cut={}, only_one_cut={})",
-        n_outliers, breakdown[0], breakdown[1], breakdown[2]
+        "outliers:              {}  (too_short={}, no_first_cut={}, only_one_cut={}, no_cut_either_strand={})",
+        n_outliers, breakdown[0], breakdown[1], breakdown[2], breakdown[3]
     );
     eprintln!("total monomers:        {}", total_mono);
     let pct = if total_mono > 0 {
