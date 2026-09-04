@@ -435,8 +435,15 @@ pub fn run_from_args(argv: Vec<String>) {
             let p: Vec<&str> = l.split('\t').collect();
             assert!(p.len() >= 9, "monomer row has {} fields, need at least 9", p.len());
             // cut-v2 --auto-orient appends an `orient` column; carry it through so
-            // the strand does not have to be re-joined from the monomer table
-            let orient = p.get(9).copied().unwrap_or(".");
+            // the strand does not have to be re-joined from the monomer table.
+            // Other producers put their own columns there (tiling tables carry
+            // `source_letter`), so accept it only if it LOOKS like a strand --
+            // taking it by position alone silently writes a letter id into the
+            // orient field.
+            let orient = match p.get(9).copied() {
+                Some(v) if v == "+" || v == "-" || v == "." => v,
+                _ => ".",
+            };
             let a = asg.assign(p[8].as_bytes());
             format!(
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.3}\t{:.3}\t{}\t{}\t{}\t{}",
